@@ -1,3 +1,4 @@
+
 # dsh-image-budget-guard
 
 中文 · [English](README.md)
@@ -67,8 +68,6 @@ dsh plugin --profile web add dsh-image-budget-guard
 ### 从github仓库安装
 ```
 dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
-```
-```
 ```
 
 或直接在dsh 插件界面中添加插件，输入本仓库地址安装即可
