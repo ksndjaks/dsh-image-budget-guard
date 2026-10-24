@@ -1,6 +1,6 @@
 {
   "name": "@ksndjaks/dsh-image-budget-guard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Proactive image budget guard for DeepSeek Harness sessions: shortens the oldest request images to durable placeholders before the request is assembled, so inline base64 payloads never reach the adapter's image ceiling.",
   "type": "module",

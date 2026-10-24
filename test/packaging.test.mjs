@@ -20,7 +20,7 @@ import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { bundlePatchPaths, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot';
+import { bundlePatchPaths, evaluatePluginCompatibility, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot';
 
 import { ConfigSchema } from '../dist/index.js';
 
@@ -88,6 +88,28 @@ test('the layer touches nothing but its own row', () => {
       assert.equal(entry.disabled, undefined, `${entry.id} must not disable another row`);
       assert.equal(entry.group, undefined, `${entry.id} must not restructure other rows`);
     }
+  }
+});
+
+test('declares the verified dsh support matrix', () => {
+  // The harness checks `engines.dsh` first and only falls back to dsh peers
+  // (`unmetRequirements()` in @deepseek-ai/dsh-app-boot). rc.1, rc.2 and rc.3
+  // were each verified against this package; the 0.2.1 release is included
+  // because the same sources are published for it, while 0.2.2 must be
+  // re-verified before it is admitted.
+  for (const runtime of ['0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1']) {
+    assert.equal(
+      evaluatePluginCompatibility(manifest, {}, runtime),
+      undefined,
+      `manifest must be compatible with dsh ${runtime}`,
+    );
+  }
+  for (const runtime of ['0.2.0', '0.2.2-rc.1', '0.1.10']) {
+    assert.notEqual(
+      evaluatePluginCompatibility(manifest, {}, runtime),
+      undefined,
+      `manifest must reject unverified dsh ${runtime}`,
+    );
   }
 });
 

@@ -77,7 +77,7 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 安装后重启对应 profile。`<package-spec>` 可以是 npm 包名、git 引用
 （`github:<owner>/<repo>`）或本地路径（`link:/absolute/path`）。本地 checkout 需要先构建
 一次;
-支持 DeepSeek Harness `0.2.1-rc.1` 与 `0.2.1-rc.2`（peer 范围 `>=0.2.1-rc.1 <=0.2.1`），需要 Node.js `>=22`。
+支持 DeepSeek Harness `0.2.1-rc.1`、`0.2.1-rc.2` 与 `0.2.1-rc.3`（范围 `>=0.2.1-rc.1 <=0.2.1`），需要 Node.js `>=22`。
 
 ## 配置
 

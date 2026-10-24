@@ -119,8 +119,8 @@ Restart the profile afterwards. `<package-spec>` is an npm name, a git reference
 (`github:<owner>/<repo>`), or a local path (`link:/absolute/path`). A local
 checkout must be built once.
 
-Supports DeepSeek Harness `0.2.1-rc.1` and `0.2.1-rc.2`
-(peer range `>=0.2.1-rc.1 <=0.2.1`) and Node.js `>=22`.
+Supports DeepSeek Harness `0.2.1-rc.1`, `0.2.1-rc.2` and `0.2.1-rc.3`
+(range `>=0.2.1-rc.1 <=0.2.1`) and Node.js `>=22`.
 
 ## Configuration
 

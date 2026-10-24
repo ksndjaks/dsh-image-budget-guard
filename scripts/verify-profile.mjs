@@ -15,7 +15,7 @@
  */
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -34,6 +34,7 @@ const DSH_BIN = join(
   'bin.js',
 );
 const PROFILE = process.env.DSH_PROFILE ?? 'web';
+const PACKAGE_NAME = '@ksndjaks/dsh-image-budget-guard';
 
 /** Encode one deterministic PNG with the built-in zlib (no image library). */
 async function png(width, height, seed) {
@@ -212,8 +213,39 @@ async function checkPatchComposition() {
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !before.has(line));
   if (introduced.length > 0) problems.push(`new stderr lines:\n${introduced.join('\n')}`);
-  const mine = guardWarnings(patched.stderr);
+  // A profile that already installed an older copy of this package keeps that
+  // copy's manifest on the bundle list. When its declared range no longer
+  // matches the running dsh, the launcher skips the whole layer, so the row
+  // silently disappears. Name the cause and the exact repair instead of only
+  // reporting the skip line.
+  const skipped = patched.stderr
+    .split('\n')
+    .find((line) => /skipping profile bundle/.test(line) && line.includes(PACKAGE_NAME));
+
+  const mine = guardWarnings(patched.stderr).filter((line) => line !== skipped);
   if (mine.length > 0) problems.push(`warnings naming this plugin:\n${mine.join('\n')}`);
+
+  if (skipped !== undefined) {
+    const installedDir = join(
+      process.env.DSH_HOME ?? join(homedir(), '.dsh'),
+      'profiles',
+      PROFILE,
+      'node_modules',
+      PACKAGE_NAME,
+    );
+    let installedVersion = 'unknown';
+    try {
+      installedVersion = JSON.parse(await readFile(join(installedDir, 'package.json'), 'utf8')).version;
+    } catch {
+      /* the bundle was resolved from somewhere else; the repair is the same */
+    }
+    problems.push(
+      `profile ${PROFILE} has an installed copy ${PACKAGE_NAME}@${installedVersion} that the running dsh skips as incompatible.\n` +
+        `  Repair after publishing this version:\n` +
+        `    dsh plugin --profile ${PROFILE} remove ${PACKAGE_NAME}\n` +
+        `    dsh plugin --profile ${PROFILE} add ${process.env.GUARD_INSTALL_SPEC ?? `<published spec>`}`,
+    );
+  }
   return {
     ok: problems.length === 0,
     detail: problems.join('\n') || `profile ${PROFILE}: row present, no new warnings or stderr lines`,

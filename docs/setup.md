@@ -6,7 +6,7 @@ package manager state.
 
 ## Requirements
 
-- DeepSeek Harness `0.2.1-rc.1` or `0.2.1-rc.2` (anything in `>=0.2.1-rc.1 <=0.2.1`).
+- DeepSeek Harness `0.2.1-rc.1`, `0.2.1-rc.2` or `0.2.1-rc.3` (anything in `>=0.2.1-rc.1 <=0.2.1`).
 - Node.js `>=22`.
 - `pnpm` on `PATH` (`dsh plugin` runs it for you).
 - A built `dist/` when installing from a local checkout (`pnpm build`).
@@ -72,6 +72,27 @@ PASS runtime mount           — cordis activates the plugin and one decision re
 At runtime the plugin logs `[image-budget-guard] {"severity":...}` lines; see
 [observability.md](observability.md) for the record shapes and the session-log
 queries.
+
+## After a DSH upgrade
+
+A plugin version pins the DSH releases it was verified against. When DSH is
+upgraded and the installed plugin no longer matches, the launcher skips the whole
+bundle with:
+
+```
+dsh: skipping profile bundle "@scope/dsh-image-budget-guard": Error: Plugin ... is incompatible with dsh <version>: requirements {...}
+```
+
+The plugin is inactive until it is reinstalled at a version that declares the new
+runtime. Pull the current repository state and reinstall:
+
+```sh
+dsh plugin --profile web remove @scope/dsh-image-budget-guard
+dsh plugin --profile web add github:<owner>/<repo>
+```
+
+`dsh --profile web --dump-config` should then list the `image-budget-guard` row
+again with no `skipping profile bundle` line.
 
 ## Configure
 
@@ -152,5 +173,6 @@ DSH_PACKAGE_DIR=/path/to/node_modules/@deepseek-ai/dsh node scripts/link-peers.m
 | `--dump-config` has no `image-budget-guard` row | package installed without `dsh.bundle`, or the profile was not restarted | check the install warning; reinstall with a package that declares the bundle |
 | `dsh: patch: entry "image-budget-guard" not found` in the profile layer | an override targets the row before the bundle layer supplies it | update the bundle or remove the override |
 | Plugin inactive, `cannot get required service` in logs | `sessions` or `llm` is not mounted in this profile | mount a profile that provides both |
+| `skipping profile bundle ... is incompatible with dsh <version>` | the installed plugin version does not declare support for this runtime | reinstall/update the plugin (see “After a DSH upgrade”) |
 | No `image/offload` events and no log lines | route has no image capability, no images on the surface, or `enabled: false` | check `reason` codes in [observability.md](observability.md) |
 | `budget-unsatisfiable` on every image-heavy step | retention floor exceeds the budget | reduce `retainSteps`/`minRetainImages` or raise `maxRequestImageBytes` (see README “Tuning”) |
