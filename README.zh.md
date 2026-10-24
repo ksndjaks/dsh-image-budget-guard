@@ -6,20 +6,14 @@
 在模型请求组装**之前**裁剪会话表层上最旧的图片，让内联 base64 请求体不会长到
 拖慢请求、引发失败甚至被适配器拒绝的规模。
 
-- [为什么需要这个插件](#为什么需要这个插件)
-- [特性](#特性)
-- [安装](#安装)
-- [配置](#配置)
-- [工作原理](#工作原理)
-- [与压缩插件的关系](#与压缩插件的关系)
-- [持久记录](#持久记录)
-- [调优](#调优)
-- [已知限制](#已知限制)
-- [实测](#实测)
-- [开发](#开发)
-- [许可证](#许可证)
+- [为什么需要这个插件](#为什么需要这个插件) - [特性](#特性) - [安装](#安装) - [配置](#配置) - [工作原理](#工作原理) - [与压缩插件的关系](#与压缩插件的关系)
+- [持久记录](#持久记录) - [调优](#调优) - [已知限制](#已知限制) - [实测](#实测) - [开发](#开发) - [许可证](#许可证)
 
 ## 为什么需要这个插件
+
+你是否遇到过这种情况：deepseek官方的API在进行长任务、多图片处理时，能够一直保持较低的延迟执行  
+而接入第三方供应商(如commandcode)时，随着模型处理的图片越来越多，延迟(首token平均)会持续升高、频繁出现连接失败乃至出现503错误？  
+本插件主要围绕该问题进行修复
 
 接入协议决定了图片怎么到达模型，与模型质量无关。同一个上游模型，走官方路由和走第三方网关是两条完全不同的传输路径：
 
@@ -65,36 +59,26 @@
 
 ## 安装
 
+### npm 源安装(暂不可用)
 ```sh
-dsh plugin --profile <profile> add <package-spec>
+dsh plugin --profile web add dsh-image-budget-guard
 ```
+
+### 从github仓库安装
+```
+dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
+```
+```
+```
+
+或直接在dsh 插件界面中添加插件，输入本仓库地址安装即可
+
+桌面端暂未经过测试
 
 安装后重启对应 profile。`<package-spec>` 可以是 npm 包名、git 引用
 （`github:<owner>/<repo>`）或本地路径（`link:/absolute/path`）。本地 checkout 需要先构建
-一次；`pnpm build` 同时会把本包与运行中安装共享的 harness 依赖软链好。git 安装要求仓库里
-带有构建好的 `dist/`（本 checkout 即是如此），而 npm 安装会从发布的 tarball 中取得。
-
-```sh
-cd /absolute/path/to/dsh-image-budget-guard
-pnpm install && pnpm build
-dsh plugin --profile web add link:/absolute/path/to/dsh-image-budget-guard
-```
-
-**无需手动编辑任何 `cordis.patch.yml`。** 本包声明了
-`"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`，安装时插件管理器会校验该层并把
-包名追加进 profile 的 `dsh.profile.bundles`，启动器随后自动应用这一层。它插入的行是
-按 id 寻址的（`image-budget-guard`），因此可以在 profile 自己的 `cordis.patch.yml` 里覆盖。
-
-检查组合结果与卸载：
-
-```sh
-dsh --profile web --dump-config | grep -A12 'image-budget-guard'
-dsh plugin --profile web remove <package-spec>
-```
-
-该行配置里的 `enabled: false` 是无需卸载的运行时开关。
-
-需要 DeepSeek Harness `0.2.1-rc.1`（peer 锁定）与 Node.js `>=22`。
+一次;
+支持 DeepSeek Harness `0.2.1-rc.1` 与 `0.2.1-rc.2`（peer 范围 `>=0.2.1-rc.1 <=0.2.1`），需要 Node.js `>=22`。
 
 ## 配置
 
@@ -255,3 +239,4 @@ src/index.ts        agent/request 钩子与插件入口
 ## 许可证
 
 MIT
+

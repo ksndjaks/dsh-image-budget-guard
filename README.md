@@ -7,20 +7,15 @@ It trims the oldest request images on the session surface *before* a model
 request is assembled, so an inline base64 body never grows into the range that
 makes requests slow, flaky, or rejected.
 
-- [Why](#why)
-- [Features](#features)
-- [Install](#install)
-- [Configuration](#configuration)
-- [How it works](#how-it-works)
-- [Relationship to the compaction plugins](#relationship-to-the-compaction-plugins)
-- [The durable record](#the-durable-record)
-- [Tuning](#tuning)
-- [Known limitations](#known-limitations)
-- [Measured](#measured)
-- [Development](#development)
-- [License](#license)
+- [Why](#why) - [Features](#features) - [Install](#install) - [Configuration](#configuration) - [How it works](#how-it-works) - [Relationship to the compaction plugins](#relationship-to-the-compaction-plugins)
+- [The durable record](#the-durable-record) - [Tuning](#tuning) - [Known limitations](#known-limitations) - [Measured](#measured) - [Development](#development) - [License](#license)
 
 ## Why
+
+Have you run into this: the official DeepSeek API keeps latency low across long,
+image-heavy tasks, while a third-party gateway (e.g. commandcode) gets slower as
+the model handles more images — average first-token latency climbs, connections
+fail more often, and 503s start showing up? This plugin exists to fix that.
 
 The protocol decides how an image reaches the model, not the model quality. The
 same upstream model is reached through two very different transports:
@@ -104,41 +99,28 @@ quality alone and omits the oldest images.
 
 ## Install
 
+### npm registry install (not available yet)
+
 ```sh
-dsh plugin --profile <profile> add <package-spec>
+dsh plugin --profile web add dsh-image-budget-guard
 ```
+
+### Install from the GitHub repository
+
+```sh
+dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
+```
+
+Or add it from the DSH plugin panel: paste this repository's URL and install.
+
+The desktop app has not been tested yet.
 
 Restart the profile afterwards. `<package-spec>` is an npm name, a git reference
 (`github:<owner>/<repo>`), or a local path (`link:/absolute/path`). A local
-checkout must be built once; `pnpm build` also links the harness peers this
-package shares with the running installation. A git install needs a repository
-that ships the built `dist/` (as this checkout does), and an npm install gets it
-from the published tarball.
+checkout must be built once.
 
-```sh
-cd /absolute/path/to/dsh-image-budget-guard
-pnpm install && pnpm build
-dsh plugin --profile web add link:/absolute/path/to/dsh-image-budget-guard
-```
-
-**No manual patch editing is required.** The package declares
-`"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`, so on install the
-plugin manager validates the layer and appends the package to the profile's
-`dsh.profile.bundles`; the launcher then applies the layer automatically. The
-row it inserts is id-addressed (`image-budget-guard`), so it can be overridden
-from the profile's own `cordis.patch.yml`.
-
-Verify the composition and remove the plugin again with:
-
-```sh
-dsh --profile web --dump-config | grep -A12 'image-budget-guard'
-dsh plugin --profile web remove <package-spec>
-```
-
-`enabled: false` in the row's config is the runtime kill switch that needs no
-uninstall.
-
-Requires DeepSeek Harness `0.2.1-rc.1` (peer-pinned) and Node.js `>=22`.
+Supports DeepSeek Harness `0.2.1-rc.1` and `0.2.1-rc.2`
+(peer range `>=0.2.1-rc.1 <=0.2.1`) and Node.js `>=22`.
 
 ## Configuration
 
