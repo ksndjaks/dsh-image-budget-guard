@@ -1,0 +1,15 @@
+# Dependencies (the harness peers are symlinked locally by scripts/link-peers.mjs)
+node_modules/
+
+# Build caches and local artifacts
+*.log
+*.tsbuildinfo
+coverage/
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Local scratch
+tmp/
+*.tmp

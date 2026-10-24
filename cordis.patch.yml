@@ -1,0 +1,47 @@
+# Bundle patch layer for @ksndjaks/dsh-image-budget-guard.
+#
+# This file is applied automatically. The package declares
+#   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+# in package.json, so `dsh plugin --profile <profile> add <package>` registers
+# the package in the profile's `dsh.profile.bundles` list and the launcher
+# applies this layer over the bundle layers below it. Do NOT copy these lines
+# into the profile's own cordis.patch.yml: the profile layer is applied after
+# every bundle layer, so an entry here can always be overridden there by id.
+#
+# The row is id-addressed. To change its configuration without editing this
+# file, override `image-budget-guard` from the profile patch layer:
+#
+#   - id: image-budget-guard
+#     config:
+#       dryRun: true
+#
+# Rollback: `dsh plugin --profile <profile> remove <package>` unregisters the
+# bundle (and this row) again; `enabled: false` is the runtime kill switch.
+- insert:
+    - id: image-budget-guard
+      name: "@ksndjaks/dsh-image-budget-guard"
+      config:
+        # Master switch; false makes every request hook a no-op.
+        enabled: true
+        # true = decide and log only, write no session event. Useful for a
+        # first observation run on a busy session.
+        dryRun: false
+        # Inline base64 routes: accumulated request-image bytes per request.
+        # Keep this at or below the adapter's own `maxRequestImageBytes`
+        # (llm-pi-ai default: 20 MiB) so the guard acts before the adapter
+        # refuses a request.
+        maxRequestImageBytes: 6291456
+        # Files/reference routes (e.g. DeepSeek /v1/files): occurrence count.
+        maxRequestImages: 60
+        # Newest occurrences that are never omitted.
+        minRetainImages: 6
+        # Images admitted in the last N steps are never omitted. 0 keeps only
+        # the minRetainImages floor: on inline routes that re-encode at ~1 MiB
+        # per image (llm-pi-ai defaults) six retained images already cost
+        # ~5.8 MiB, so a 12-step window can exceed a 6 MiB budget. Raise
+        # maxRequestImageBytes (e.g. 10-12 MiB) to afford a wider window.
+        retainSteps: 0
+        # Minimum occurrences omitted per decision (fewer only when fewer are
+        # eligible).
+        quanta: 4
+        logLevel: info
