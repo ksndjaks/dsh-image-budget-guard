@@ -354,6 +354,64 @@ test('count dimension: unbounded bytes never trigger a byte decision', () => {
   assert.deepEqual(result.targets, []);
 });
 
+test('dual bounds: a count cap trims even when the byte payload fits (Mistral 20-image case)', () => {
+  // The measured failure: 21 occurrences totalling ~4.0 MiB base64, well under a
+  // 6 MiB byte budget, rejected by the provider with
+  // "Total number of images exceeds the maximum allowed of 20".
+  const per = Math.round((4 * 1024 * 1024) / 21);
+  const occurrences = Array.from({ length: 21 }, (_, index) => ({
+    seq: 5,
+    imageIndex: index,
+    attachmentId: `att-${index}`,
+    bytes: per,
+    offloaded: false,
+    recent: false,
+  }));
+  const result = planImageOffload(occurrences, {
+    dimension: 'bytes',
+    maxBytes: 6 * 1024 * 1024,
+    maxImages: 20,
+    minRetainImages: 4,
+    quanta: 4,
+  });
+
+  assert.ok(result.payloadBytes < 6 * 1024 * 1024, 'the byte payload already fits');
+  assert.equal(result.retainedCount, 21);
+  assert.equal(result.reason, 'selected', 'the count bound alone must trigger a decision');
+  assert.ok(result.retainedAfter <= 20, `retained ${result.retainedAfter} must respect the count cap`);
+  assert.equal(result.removedCount, 4, 'the quantum floor removes four');
+  assert.equal(result.budgetSatisfied, true);
+  // Still oldest-first: the newest four stay.
+  const removed = result.targets.flatMap((target) => target.imageIndexes).sort((a, b) => a - b);
+  assert.deepEqual(removed, [0, 1, 2, 3]);
+});
+
+test('dual bounds: the stricter bound decides how many occurrences go', () => {
+  const occurrences = (count, bytes) =>
+    Array.from({ length: count }, (_, index) => ({
+      seq: 9,
+      imageIndex: index,
+      attachmentId: `a-${index}`,
+      bytes,
+      offloaded: false,
+      recent: false,
+    }));
+
+  // Bytes bind: 10 x 1 MiB with a 3 MiB budget needs 7 removals; the count cap of 9 needs 1.
+  const bytesBind = planImageOffload(occurrences(10, 1024 * 1024), {
+    dimension: 'bytes', maxBytes: 3 * 1024 * 1024, maxImages: 9, minRetainImages: 0, quanta: 1,
+  });
+  assert.equal(bytesBind.removedCount, 7, 'the byte bound is the stricter one');
+  assert.ok(bytesBind.payloadAfterBytes <= 3 * 1024 * 1024);
+
+  // Count binds: 10 x 1 KiB fits any byte budget but the cap of 9 still needs one removal.
+  const countBind = planImageOffload(occurrences(10, 1024), {
+    dimension: 'bytes', maxBytes: 3 * 1024 * 1024, maxImages: 9, minRetainImages: 0, quanta: 1,
+  });
+  assert.equal(countBind.removedCount, 1, 'the count bound is the stricter one');
+  assert.equal(countBind.retainedAfter, 9);
+});
+
 test('bytes dimension: maxImages Infinity never triggers a count decision', () => {
   const occurrences = chain(200, 1);
   const result = planImageOffload(occurrences, budget({ maxBytes: 10_000, maxImages: Number.POSITIVE_INFINITY }));

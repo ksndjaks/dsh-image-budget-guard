@@ -83,9 +83,12 @@ quality alone and omits the oldest images.
 - **Retention floors.** The newest `minRetainImages` occurrences and every image
   admitted in the last `retainSteps` steps are never omitted, even when that
   leaves the budget unsatisfied (it is reported, not violated).
-- **Per-route budget dimension.** Inline base64 routes use a byte budget;
-  Files/reference routes use an occurrence budget; routes without image
-  capability are a no-op.
+- **Both budget dimensions.** An inline base64 route enforces a byte budget and
+  an occurrence budget together, because a provider can cap the body size and
+  the image count independently (Mistral rejects the 21st image while the body
+  is still a few MiB). A Files/reference route enforces the occurrence budget
+  only, since its occurrences cost references. Routes without image capability
+  are a no-op.
 - **Exact accounting.** Sizes come from the same request-image projection the
   adapter sends (`llm.imageRequestTarget()` + `attachments.readImageRequest()`),
   cached per request version, so a warm guard never re-encodes history.
@@ -137,7 +140,7 @@ reachable at all (see [Tuning](#tuning)).
 | `dryRun` | `false` | Decide and log, but write no session event. |
 | `representation` | `auto` | `auto` \| `inline-base64` \| `files`. Selects the budget dimension. |
 | `maxRequestImageBytes` | `6291456` | Inline base64 route budget: accumulated encoded request bytes. |
-| `maxRequestImages` | `60` | Files/reference route budget: represented image occurrences. |
+| `maxRequestImages` | `20` | Occurrence budget. Enforced together with the byte budget on inline routes; raise it for a provider or Files route that accepts more. |
 | `minRetainImages` | `6` | Newest occurrences that are never omitted. |
 | `retainSteps` | `12` | Images admitted in the last N steps are never omitted (`0` disables the window). |
 | `quanta` | `4` | Minimum occurrences omitted per decision; fewer only when fewer are eligible. |
@@ -253,6 +256,11 @@ reactive omission happen.
 - **Budget below the adapter ceiling.** Keep `maxRequestImageBytes` at or below
   the adapter's own limit. `llm-pi-ai` defaults to 20 MiB per request; a guard
   budget of 6 MiB therefore acts long before the adapter would refuse.
+- **Match the occurrence budget to the provider's image cap.** An inline route
+  enforces `maxRequestImages` alongside the byte budget, and the shipped 20
+  matches the most common hard cap (Mistral and several others reject the 21st
+  image). A provider that accepts more, or a Files route, should raise it with
+  `perRoute[].maxRequestImages`.
 - **Size the floors against the per-image cost.** Rule of thumb:
   `maxRequestImageBytes >= minRetainImages × perImageBase64`, plus whatever the
   `retainSteps` window admits. On an inline route that re-encodes at ~1 MiB per
@@ -284,7 +292,9 @@ reactive omission happen.
   which a decision causes. Negligible against serializing megabytes, non-zero on
   very long sessions.
 - **Files routes budget occurrences, not bytes**, because the provider receives
-  references rather than inline data.
+  references rather than inline data. The shipped `maxRequestImages: 20` is
+  tuned for inline providers' hard caps; a Files route such as DeepSeek's
+  `/v1/files` accepts far more, so raise it there.
 - **Representation auto-detection is a heuristic.** The adapter API exposes
   request geometry and pricing but not whether bytes travel inline or through a
   Files endpoint; `auto` reads the configurable-provider directory and falls

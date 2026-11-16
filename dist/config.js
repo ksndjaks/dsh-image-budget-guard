@@ -50,8 +50,7 @@ export const ConfigSchema = z
     representation: z.enum(['auto', 'inline-base64', 'files']).default('auto'),
     /** Inline base64 route budget: accumulated encoded request bytes (default 6 MiB). */
     maxRequestImageBytes: positiveInteger.default(6 * 1024 * 1024),
-    /** Files/reference route budget: represented image occurrences (default 60). */
-    maxRequestImages: positiveInteger.default(60),
+    maxRequestImages: positiveInteger.default(20),
     /** Newest occurrences that are never omitted (default 6). */
     minRetainImages: nonNegativeInteger.default(6),
     /** Images admitted within the last N steps are never omitted (default 12). */
@@ -82,14 +81,24 @@ export function resolveRouteBudget(config, provider, model, representationHint) 
     }
     const representation = override?.representation ??
         (config.representation === 'auto' ? (representationHint ?? 'inline-base64') : config.representation);
+    // `dimension` names the bound that decides the wire cost: inline routes pay
+    // bytes, Files routes pay a reference per occurrence. It does NOT switch the
+    // other bound off. A provider can cap the body size and the image count
+    // independently — Mistral answers 21 occurrences with
+    // "Total number of images exceeds the maximum allowed of 20" while the body
+    // is still a few MiB — so an inline route enforces both bounds and the
+    // stricter one wins. A Files route keeps `maxBytes` unbounded because its
+    // occurrences cost ids, not bytes.
     const dimension = representation === 'files' ? 'count' : 'bytes';
     return Object.freeze({
         provider,
         model,
         representation,
         dimension,
-        maxBytes: dimension === 'bytes' ? (override?.maxRequestImageBytes ?? config.maxRequestImageBytes) : Number.POSITIVE_INFINITY,
-        maxImages: dimension === 'count' ? (override?.maxRequestImages ?? config.maxRequestImages) : Number.POSITIVE_INFINITY,
+        maxBytes: representation === 'files'
+            ? Number.POSITIVE_INFINITY
+            : (override?.maxRequestImageBytes ?? config.maxRequestImageBytes),
+        maxImages: override?.maxRequestImages ?? config.maxRequestImages,
         minRetainImages: override?.minRetainImages ?? config.minRetainImages,
         retainSteps: override?.retainSteps ?? config.retainSteps,
         quanta: override?.quanta ?? config.quanta,

@@ -31,8 +31,14 @@
         # (llm-pi-ai default: 20 MiB) so the guard acts before the adapter
         # refuses a request.
         maxRequestImageBytes: 6291456
-        # Files/reference routes (e.g. DeepSeek /v1/files): occurrence count.
-        maxRequestImages: 60
+        # Occurrence budget. An inline route enforces this together with
+        # maxRequestImageBytes, because a provider can cap the image count
+        # independently of the body size: Mistral answers 21 occurrences with
+        # "Total number of images exceeds the maximum allowed of 20" while the
+        # body is still a few MiB. 20 matches the most common hard cap; raise it
+        # per route (perRoute[].maxRequestImages) for a provider that accepts
+        # more, or for a Files route (DeepSeek allows 600).
+        maxRequestImages: 20
         # Newest occurrences that are never omitted.
         #
         # The floor is minRetainImages x per-image request bytes, and it wins

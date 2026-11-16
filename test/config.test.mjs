@@ -37,7 +37,7 @@ test('defaults: every field is optional and defaulted', () => {
   assert.equal(config.dryRun, false);
   assert.equal(config.representation, 'auto');
   assert.equal(config.maxRequestImageBytes, 6 * 1024 * 1024, '6 MiB inline budget');
-  assert.equal(config.maxRequestImages, 60);
+  assert.equal(config.maxRequestImages, 20);
   assert.equal(config.minRetainImages, 6);
   assert.equal(config.retainSteps, 12);
   assert.equal(config.quanta, 4);
@@ -177,7 +177,10 @@ test('resolveRouteBudget: inline-base64 hint selects the byte dimension', () => 
   assert.equal(policy.representation, 'inline-base64');
   assert.equal(policy.dimension, 'bytes');
   assert.equal(policy.maxBytes, 4096);
-  assert.equal(policy.maxImages, Number.POSITIVE_INFINITY, 'the non-primary budget is unbounded');
+  // An inline route enforces both bounds: a provider can cap the body size and
+  // the image count independently (Mistral: 20 images). The byte bound decides
+  // the wire cost, so it names the dimension, but the count bound still applies.
+  assert.equal(policy.maxImages, 7, 'the count bound stays enforced on an inline route');
   assert.ok(Object.isFrozen(policy), 'the resolved policy is frozen');
 });
 
@@ -269,7 +272,7 @@ test('resolveRouteBudget: last-wins is per field, not an object merge', () => {
   assert.equal(policy.quanta, config.quanta, 'the later entry replaces the earlier override entirely');
 });
 
-test('resolveRouteBudget: the override budget for the non-primary dimension is ignored', () => {
+test('resolveRouteBudget: an inline route takes both overrides, a files route only the count', () => {
   const config = parsed({
     maxRequestImages: 10,
     perRoute: [{ provider: 'p', model: 'm', maxRequestImages: 3, maxRequestImageBytes: 5 }],
@@ -277,11 +280,11 @@ test('resolveRouteBudget: the override budget for the non-primary dimension is i
 
   const inline = resolveRouteBudget(config, 'p', 'm', 'inline-base64');
   assert.equal(inline.maxBytes, 5, 'byte override applies on an inline route');
-  assert.equal(inline.maxImages, Number.POSITIVE_INFINITY);
+  assert.equal(inline.maxImages, 3, 'count override applies on an inline route too');
 
   const files = resolveRouteBudget(config, 'p', 'm', 'files');
   assert.equal(files.maxImages, 3, 'count override applies on a files route');
-  assert.equal(files.maxBytes, Number.POSITIVE_INFINITY);
+  assert.equal(files.maxBytes, Number.POSITIVE_INFINITY, 'a files route pays references, not bytes');
 });
 
 test('resolveRouteBudget: retention and quanta inherit from the global config', () => {

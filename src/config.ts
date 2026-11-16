@@ -64,8 +64,7 @@ export const ConfigSchema = z
     representation: z.enum(['auto', 'inline-base64', 'files']).default('auto'),
     /** Inline base64 route budget: accumulated encoded request bytes (default 6 MiB). */
     maxRequestImageBytes: positiveInteger.default(6 * 1024 * 1024),
-    /** Files/reference route budget: represented image occurrences (default 60). */
-    maxRequestImages: positiveInteger.default(60),
+    maxRequestImages: positiveInteger.default(20),
     /** Newest occurrences that are never omitted (default 6). */
     minRetainImages: nonNegativeInteger.default(6),
     /** Images admitted within the last N steps are never omitted (default 12). */
@@ -88,10 +87,11 @@ export interface RouteBudgetPolicy {
   readonly provider: string;
   readonly model: string;
   readonly representation: RouteRepresentation;
+  /** The bound that decides the wire cost; both bounds are still enforced. */
   readonly dimension: BudgetDimension;
-  /** Byte budget; `Number.POSITIVE_INFINITY` when the route counts occurrences. */
+  /** Byte budget; `Number.POSITIVE_INFINITY` on a Files route, whose occurrences cost references. */
   readonly maxBytes: number;
-  /** Occurrence budget; `Number.POSITIVE_INFINITY` when the route counts bytes. */
+  /** Occurrence budget; enforced together with `maxBytes` on an inline route. */
   readonly maxImages: number;
   readonly minRetainImages: number;
   readonly retainSteps: number;
@@ -122,14 +122,25 @@ export function resolveRouteBudget(
   const representation: RouteRepresentation =
     override?.representation ??
     (config.representation === 'auto' ? (representationHint ?? 'inline-base64') : config.representation);
+  // `dimension` names the bound that decides the wire cost: inline routes pay
+  // bytes, Files routes pay a reference per occurrence. It does NOT switch the
+  // other bound off. A provider can cap the body size and the image count
+  // independently — Mistral answers 21 occurrences with
+  // "Total number of images exceeds the maximum allowed of 20" while the body
+  // is still a few MiB — so an inline route enforces both bounds and the
+  // stricter one wins. A Files route keeps `maxBytes` unbounded because its
+  // occurrences cost ids, not bytes.
   const dimension: BudgetDimension = representation === 'files' ? 'count' : 'bytes';
   return Object.freeze({
     provider,
     model,
     representation,
     dimension,
-    maxBytes: dimension === 'bytes' ? (override?.maxRequestImageBytes ?? config.maxRequestImageBytes) : Number.POSITIVE_INFINITY,
-    maxImages: dimension === 'count' ? (override?.maxRequestImages ?? config.maxRequestImages) : Number.POSITIVE_INFINITY,
+    maxBytes:
+      representation === 'files'
+        ? Number.POSITIVE_INFINITY
+        : (override?.maxRequestImageBytes ?? config.maxRequestImageBytes),
+    maxImages: override?.maxRequestImages ?? config.maxRequestImages,
     minRetainImages: override?.minRetainImages ?? config.minRetainImages,
     retainSteps: override?.retainSteps ?? config.retainSteps,
     quanta: override?.quanta ?? config.quanta,

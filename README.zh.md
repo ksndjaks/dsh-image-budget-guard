@@ -47,8 +47,9 @@
   为最旧的若干图片出现位置写入一条持久的 `image/offload` 事件，直到载荷回到预算内。
 - **保留下限**：最新 `minRetainImages` 张图片、以及最近 `retainSteps` 步内出现的图片
   永远不会被省略；即使因此无法满足预算，也只报告、不破坏下限。
-- **按路由选择预算维度**：内联 base64 路由用字节预算；Files/引用式路由用数量预算；
-  不具备图片能力的路由直接 no-op。
+- **两个预算维度同时生效**：内联 base64 路由同时执行字节预算与数量预算，因为供应商
+  可以分别限制请求体大小和图片张数（Mistral 在请求体只有几 MiB 时就会拒绝第 21 张图）；
+  Files/引用式路由只执行数量预算，因为它的出现位置只花引用。不具备图片能力的路由直接 no-op。
 - **精确计量**：尺寸取自适配器实际发送的同一套请求图片投影
   （`llm.imageRequestTarget()` + `attachments.readImageRequest()`），并按请求版本缓存，
   热态下不会重复编码历史。
@@ -93,7 +94,7 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 | `dryRun` | `false` | 只决策与记录，不写会话事件。 |
 | `representation` | `auto` | `auto` \| `inline-base64` \| `files`，决定预算维度。 |
 | `maxRequestImageBytes` | `6291456` | 内联 base64 路由预算：单次请求累计编码字节。 |
-| `maxRequestImages` | `60` | Files/引用式路由预算：图片出现位置数量。 |
+| `maxRequestImages` | `20` | 出现位置数量预算。内联路由与字节预算同时生效；供应商或 Files 路由允许更多时应调高。 |
 | `minRetainImages` | `6` | 永远不省略的最新出现位置数量。 |
 | `retainSteps` | `12` | 最近 N 步内出现的图片不省略（`0` 关闭该窗口）。 |
 | `quanta` | `4` | 单次决策至少省略的出现位置数；候选不足时例外。 |
@@ -189,6 +190,9 @@ Standard Schema 接口校验它。
 
 - **预算要低于适配器上限。** `maxRequestImageBytes` 应不高于适配器自身的限制。
   `llm-pi-ai` 默认每请求 20 MiB；因此 6 MiB 的守卫预算会在适配器拒绝之前很早就生效。
+- **数量预算要匹配供应商的图片上限。** 内联路由会在字节预算之外同时执行
+  `maxRequestImages`，出厂值 20 对应最常见的硬上限（Mistral 等供应商会拒绝第 21 张图）。
+  允许更多图片的供应商、或 Files 路由，应通过 `perRoute[].maxRequestImages` 调高。
 - **保留下限要对照单图成本。** 经验公式：
   `maxRequestImageBytes >= minRetainImages × 单图 base64 字节`，再加上 `retainSteps`
   窗口纳入的图片。内联路由若按每图约 1 MiB 重新编码，单图约 1.33 MiB base64
@@ -211,7 +215,9 @@ Standard Schema 接口校验它。
   节点之后不再逐字节相等。
 - **每步开销与表层节点数成正比。** 读取表层是线性的，且内容代数变化时派生消息缓存会重建
   ——决策本身就会触发这种变化。相对序列化数 MB 图片可以忽略，但在极长会话中并非为零。
-- **Files 路由按数量而非字节**，因为 provider 收到的是引用而不是内联数据。
+- **Files 路由按数量而非字节**，因为 provider 收到的是引用而不是内联数据。出厂的
+  `maxRequestImages: 20` 是按内联供应商的硬上限调的；DeepSeek 的 `/v1/files` 之类
+  Files 路由允许更多，应自行调高。
 - **表示形式的自动探测是启发式的。** 适配器 API 暴露请求几何与计价，但不暴露字节是内联
   还是走 Files 端点；`auto` 会读取可配置 provider 目录，并回退到保守的内联字节预算。
   `perRoute` 是逃生口。

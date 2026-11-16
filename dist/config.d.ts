@@ -85,10 +85,11 @@ export interface RouteBudgetPolicy {
     readonly provider: string;
     readonly model: string;
     readonly representation: RouteRepresentation;
+    /** The bound that decides the wire cost; both bounds are still enforced. */
     readonly dimension: BudgetDimension;
-    /** Byte budget; `Number.POSITIVE_INFINITY` when the route counts occurrences. */
+    /** Byte budget; `Number.POSITIVE_INFINITY` on a Files route, whose occurrences cost references. */
     readonly maxBytes: number;
-    /** Occurrence budget; `Number.POSITIVE_INFINITY` when the route counts bytes. */
+    /** Occurrence budget; enforced together with `maxBytes` on an inline route. */
     readonly maxImages: number;
     readonly minRetainImages: number;
     readonly retainSteps: number;
