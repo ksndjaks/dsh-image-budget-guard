@@ -39,42 +39,7 @@ import { type ProjectionMode } from './projection.js';
  * `~standard.validate()` interface, which Zod 4 implements; `.strict()` makes
  * an unknown key a load-time `ValidationError` instead of a silent typo.
  */
-export declare const Config: import("zod").ZodObject<{
-    enabled: import("zod").ZodDefault<import("zod").ZodBoolean>;
-    dryRun: import("zod").ZodDefault<import("zod").ZodBoolean>;
-    representation: import("zod").ZodDefault<import("zod").ZodEnum<{
-        "inline-base64": "inline-base64";
-        files: "files";
-        auto: "auto";
-    }>>;
-    maxRequestImageBytes: import("zod").ZodDefault<import("zod").ZodNumber>;
-    maxRequestImages: import("zod").ZodDefault<import("zod").ZodNumber>;
-    minRetainImages: import("zod").ZodDefault<import("zod").ZodNumber>;
-    retainSteps: import("zod").ZodDefault<import("zod").ZodNumber>;
-    quanta: import("zod").ZodDefault<import("zod").ZodNumber>;
-    perRoute: import("zod").ZodDefault<import("zod").ZodArray<import("zod").ZodObject<{
-        provider: import("zod").ZodString;
-        model: import("zod").ZodString;
-        enabled: import("zod").ZodOptional<import("zod").ZodBoolean>;
-        representation: import("zod").ZodOptional<import("zod").ZodEnum<{
-            "inline-base64": "inline-base64";
-            files: "files";
-        }>>;
-        imageCapable: import("zod").ZodOptional<import("zod").ZodBoolean>;
-        maxRequestImageBytes: import("zod").ZodOptional<import("zod").ZodNumber>;
-        maxRequestImages: import("zod").ZodOptional<import("zod").ZodNumber>;
-        minRetainImages: import("zod").ZodOptional<import("zod").ZodNumber>;
-        retainSteps: import("zod").ZodOptional<import("zod").ZodNumber>;
-        quanta: import("zod").ZodOptional<import("zod").ZodNumber>;
-    }, import("zod/v4/core").$strict>>>;
-    logLevel: import("zod").ZodDefault<import("zod").ZodEnum<{
-        silent: "silent";
-        error: "error";
-        warn: "warn";
-        info: "info";
-        debug: "debug";
-    }>>;
-}, import("zod/v4/core").$strict>;
+export declare const Config: Schemastery<ImageBudgetGuardConfig, ImageBudgetGuardConfig, "plain">;
 /** Plugin name used in diagnostics. */
 export declare const name = "image-budget-guard";
 /**
@@ -180,7 +145,7 @@ export declare function createGuard(ctx: Context, config: ImageBudgetGuardConfig
 export declare function apply(ctx: Context, config: ImageBudgetGuardConfig): void;
 export type { ImageBudgetGuardConfig, ImageBudgetGuardConfigInput, RouteBudgetPolicy } from './config.js';
 export type { ImageOccurrence, OffloadTarget, SelectionResult } from './select.js';
-export { ConfigSchema, resolveRouteBudget, routeEnabled, routeCapabilityOverride } from './config.js';
+export { ConfigSchema, MISTRAL_IMAGE_LIMIT, assertKnownConfigKeys, isMistralRoute, parseConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
 export { planImageOffload, base64Length } from './select.js';
 export { IMAGE_OFFLOAD_EVENT, appendImageOffloadDecision, ensureImageOffloadProjection, hasImageOffloadProjection, isCompactionInProgress, recentStepBoundary, surfaceImageOccurrences, validateOffloadTargets, } from './projection.js';
 //# sourceMappingURL=index.d.ts.map

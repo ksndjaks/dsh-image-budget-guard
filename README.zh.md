@@ -94,7 +94,8 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 | `dryRun` | `false` | 只决策与记录，不写会话事件。 |
 | `representation` | `auto` | `auto` \| `inline-base64` \| `files`，决定预算维度。 |
 | `maxRequestImageBytes` | `6291456` | 内联 base64 路由预算：单次请求累计编码字节。 |
-| `maxRequestImages` | `20` | 出现位置数量预算。内联路由与字节预算同时生效；供应商或 Files 路由允许更多时应调高。 |
+| `maxRequestImages` | `60` | 出现位置数量预算。内联路由与字节预算同时生效；供应商或 Files 路由允许更多时应调高。 |
+| `mistralImageLimit` | `false` | Mistral 专用开关：启用后，provider 名为 `mistral` 的路由图片上限固定为 20 张（Mistral 会拒绝第 21 张）。只会降低上限。 |
 | `minRetainImages` | `6` | 永远不省略的最新出现位置数量。 |
 | `retainSteps` | `12` | 最近 N 步内出现的图片不省略（`0` 关闭该窗口）。 |
 | `quanta` | `4` | 单次决策至少省略的出现位置数；候选不足时例外。 |
@@ -191,8 +192,9 @@ Standard Schema 接口校验它。
 - **预算要低于适配器上限。** `maxRequestImageBytes` 应不高于适配器自身的限制。
   `llm-pi-ai` 默认每请求 20 MiB；因此 6 MiB 的守卫预算会在适配器拒绝之前很早就生效。
 - **数量预算要匹配供应商的图片上限。** 内联路由会在字节预算之外同时执行
-  `maxRequestImages`，出厂值 20 对应最常见的硬上限（Mistral 等供应商会拒绝第 21 张图）。
-  允许更多图片的供应商、或 Files 路由，应通过 `perRoute[].maxRequestImages` 调高。
+  `maxRequestImages`。Mistral 是特例——请求体只有几 MiB 时它也会拒绝第 21 张图——因此
+  它用独立开关 `mistralImageLimit`，而不是把全局默认值调低。给 Mistral 路由打开该开关即可；
+  允许更多图片的供应商、或 Files 路由，用 `perRoute[].maxRequestImages` 调高。
 - **保留下限要对照单图成本。** 经验公式：
   `maxRequestImageBytes >= minRetainImages × 单图 base64 字节`，再加上 `retainSteps`
   窗口纳入的图片。内联路由若按每图约 1 MiB 重新编码，单图约 1.33 MiB base64

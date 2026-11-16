@@ -37,9 +37,9 @@ import { AttachmentStore } from '@deepseek-ai/dsh-attachment';
 import { imageOffloadProjection } from '@deepseek-ai/dsh-compaction-image-offload/projection';
 
 import {
-  ConfigSchema,
   apply,
   createGuard,
+  parseConfig,
   ensureImageOffloadProjection,
   hasImageOffloadProjection,
   recentStepBoundary,
@@ -227,7 +227,7 @@ test('projection: registered lazily on first decision, then reused', async () =>
   assert.equal(hasImageOffloadProjection(ctx), false, 'nothing is registered before the first decision');
   assert.equal(ctx.sessions.messageProjections.length, 0);
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'offloaded');
@@ -248,7 +248,7 @@ test('projection: an already-mounted offload plugin wins (reused, no duplicate r
   assert.equal(ensureImageOffloadProjection(ctx), 'reused');
   assert.equal(ctx.sessions.messageProjections.length, 1);
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
   assert.equal(decision.action, 'offloaded', 'the guard still writes a decision through the mounted projection');
   assert.equal(ctx.sessions.messageProjections.length, 1, 'no second registration was attempted');
@@ -270,7 +270,7 @@ test('offload: one event, selected targets, and offloaded placeholders in the de
   const before = session.deriveMessages();
 
   // 4 × 400 B = 1600 B represented; keep the newest 1, budget 800 B.
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'offloaded');
@@ -330,7 +330,7 @@ test('prefix stability: JSON before the first modified message is byte-identical
 
   // 4 × 400 B represented; keep the newest 2, so the two oldest image messages
   // (surface positions 2 and 3) are selected and the last two stay untouched.
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 800, minRetainImages: 2, retainSteps: 0, quanta: 2 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 800, minRetainImages: 2, retainSteps: 0, quanta: 2 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
   assert.deepEqual(positions(decision.selected), [`${nodes[2]}:0`, `${nodes[3]}:0`]);
 
@@ -357,7 +357,7 @@ test('idempotency: a second pass appends nothing', async () => {
   const session = ctx.sessions.create('idem');
   for (let step = 1; step <= 4; step += 1) appendImageStep(session, step, `att-${step}`);
 
-  const config = ConfigSchema.parse({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 });
+  const config = parseConfig({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 });
   const guard = createGuard(ctx, config);
 
   const first = await guard.run(factsFor(session), RESOLVED);
@@ -379,7 +379,7 @@ test('idempotency: a second pass reports no-candidates when retention makes the 
   for (let step = 1; step <= 4; step += 1) appendImageStep(session, step, `att-${step}`);
 
   // Keep the newest 1 but demand a 1-byte budget: the guard cannot satisfy it.
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
   const first = await guard.run(factsFor(session), RESOLVED);
   assert.equal(first.action, 'offloaded');
   assert.equal(first.reason, 'exhausted-candidates');
@@ -405,7 +405,7 @@ test('dryRun: writes nothing, reports would-offload and every selected position'
 
   const guard = createGuard(
     ctx,
-    ConfigSchema.parse({ dryRun: true, maxRequestImageBytes: 400, minRetainImages: 1, retainSteps: 0, quanta: 1 }),
+    parseConfig({ dryRun: true, maxRequestImageBytes: 400, minRetainImages: 1, retainSteps: 0, quanta: 1 }),
   );
   const decision = await guard.run(factsFor(session), RESOLVED);
 
@@ -440,7 +440,7 @@ test('replay: Session.create over the same events reproduces the same decision',
   const session = ctx.sessions.create('original');
   for (let step = 1; step <= 4; step += 1) appendImageStep(session, step, `att-${step}`);
 
-  const config = ConfigSchema.parse({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 });
+  const config = parseConfig({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 });
   const guard = createGuard(ctx, config);
   const original = await guard.run(factsFor(session), RESOLVED);
   assert.equal(original.action, 'offloaded');
@@ -480,7 +480,7 @@ test('fork: a child session decides independently and never mutates the parent',
   assert.equal(JSON.stringify(parent.deriveMessages()), parentDerivedBefore);
   assert.deepEqual(child.surface.nodes, parent.surface.nodes, 'the child inherits the same surface');
 
-  const config = ConfigSchema.parse({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 });
+  const config = parseConfig({ maxRequestImageBytes: 800, minRetainImages: 1, retainSteps: 0, quanta: 1 });
   const childGuard = createGuard(ctx, config);
   const childDecision = await childGuard.run(factsFor(child), RESOLVED);
   assert.equal(childDecision.action, 'offloaded');
@@ -502,7 +502,7 @@ test('no-op: a surface with no image occurrences', async () => {
   appendUserStep(session, 1, [{ type: 'text', text: 'just text' }]);
   const seqBefore = session.seq;
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -533,7 +533,7 @@ test('no-op: an assistant-only image surface is not a request input', async () =
 
   assert.deepEqual(surfaceImageOccurrences(session), [], 'no occurrence is read from a non-request node');
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
   assert.equal(decision.action, 'noop');
   assert.equal(decision.reason, 'no-images');
@@ -546,7 +546,7 @@ test('no-op: no attachments service mounted', async () => {
   const seqBefore = session.seq;
 
   assert.equal(ctx.get('attachments'), undefined, 'the service is genuinely absent');
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -564,7 +564,7 @@ test('no-op: text-only route is not image capable', async () => {
   appendImageStep(session, 1, 'att-1');
   const seqBefore = session.seq;
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -577,7 +577,7 @@ test('no-op: unknown modalities are treated as not image capable', async () => {
   const session = ctx.sessions.create('unknown-modalities');
   appendImageStep(session, 1, 'att-1');
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
   assert.equal(decision.reason, 'route-not-image-capable');
 });
@@ -589,7 +589,7 @@ test('no-op: an open compaction transaction holds the lock', async () => {
   session.append('compaction/start', {});
   const seqBefore = session.seq;
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const open = await guard.run(factsFor(session), RESOLVED);
   assert.equal(open.action, 'noop');
   assert.equal(open.reason, 'compaction-in-progress');
@@ -607,7 +607,7 @@ test('no-op: an already-aborted turn signal', async () => {
   appendImageStep(session, 1, 'att-1');
   const seqBefore = session.seq;
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session, { signal: AbortSignal.abort() }), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -620,7 +620,7 @@ test('no-op: disabled switch, disabled route, and an empty route', async () => {
   const session = ctx.sessions.create('switches');
   appendImageStep(session, 1, 'att-1');
 
-  const disabled = createGuard(ctx, ConfigSchema.parse({ enabled: false, maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const disabled = createGuard(ctx, parseConfig({ enabled: false, maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   assert.deepEqual(
     (({ action, reason }) => ({ action, reason }))(await disabled.run(factsFor(session), RESOLVED)),
     { action: 'noop', reason: 'disabled' },
@@ -628,7 +628,7 @@ test('no-op: disabled switch, disabled route, and an empty route', async () => {
 
   const routeDisabled = createGuard(
     ctx,
-    ConfigSchema.parse({
+    parseConfig({
       maxRequestImageBytes: 1,
       minRetainImages: 0,
       retainSteps: 0,
@@ -638,7 +638,7 @@ test('no-op: disabled switch, disabled route, and an empty route', async () => {
   );
   assert.equal((await routeDisabled.run(factsFor(session), RESOLVED)).reason, 'route-disabled');
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const noRoute = await guard.run(factsFor(session), { provider: '', model: '' });
   assert.equal(noRoute.action, 'noop');
   assert.equal(noRoute.reason, 'no-route');
@@ -669,7 +669,7 @@ test('stale-surface: a surface that changes during estimation writes nothing', a
     return original(ref, target, signal);
   };
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -695,7 +695,7 @@ test('append-failed: a throwing session append leaves the log unchanged', async 
     },
   });
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(proxy), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -711,7 +711,7 @@ test('estimate-failed: an unreadable request version is a no-op with no event', 
   const seqBefore = session.seq;
   const logs = captureLogs(ctx);
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -728,7 +728,7 @@ test('estimate-failed: a throwing imageRequestTarget is a no-op with no event', 
   appendImageStep(session, 1, 'att-1');
   const seqBefore = session.seq;
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -742,7 +742,7 @@ test('never throws: a failing model resolution downgrades to a no-op', async () 
   appendImageStep(session, 1, 'att-1');
   const seqBefore = session.seq;
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -757,7 +757,7 @@ test('perRoute imageCapable: true forces a capability the adapter does not decla
 
   const guard = createGuard(
     ctx,
-    ConfigSchema.parse({
+    parseConfig({
       maxRequestImageBytes: 1,
       minRetainImages: 0,
       retainSteps: 0,
@@ -777,7 +777,7 @@ test('perRoute imageCapable: false vetoes a capable adapter', async () => {
 
   const guard = createGuard(
     ctx,
-    ConfigSchema.parse({
+    parseConfig({
       maxRequestImageBytes: 1,
       minRetainImages: 0,
       retainSteps: 0,
@@ -797,7 +797,7 @@ test('representation: a Files-route adapter resolves the count dimension', async
   const session = ctx.sessions.create('files-route');
   for (let step = 1; step <= 5; step += 1) appendImageStep(session, step, `att-${step}`);
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImages: 3, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImages: 3, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.policy.representation, 'files');
@@ -816,7 +816,7 @@ test('representation: a pi-ai route keeps the inline base64 byte budget', async 
   const session = ctx.sessions.create('inline-route');
   appendImageStep(session, 1, 'att-1');
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 100, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 100, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.policy.representation, 'inline-base64');
@@ -834,7 +834,7 @@ test('multiple images in one message become one target with ascending indexes', 
   ]);
   appendImageStep(session, 2, 'att-c');
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 400, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 400, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.deepEqual(decision.selected, [{ seq, imageIndexes: [0, 1] }]);
@@ -865,7 +865,7 @@ test('tool/result images are request occurrences too', async () => {
 
   assert.deepEqual(surfaceImageOccurrences(session).map((occurrence) => `${occurrence.seq}:${occurrence.imageIndex}`), [`${resultSeq}:0`]);
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
   assert.equal(decision.action, 'offloaded');
   assert.deepEqual(decision.selected, [{ seq: resultSeq, imageIndexes: [0] }]);
@@ -883,7 +883,7 @@ test('coexistence: an occurrence the sibling offload plugin already omitted is s
   const readsBefore = world.requestCalls;
 
   // 2 retained × 400 B = 800 B; budget 700 B ⇒ the next-oldest must go.
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 700, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 700, minRetainImages: 1, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'offloaded');
@@ -904,7 +904,7 @@ test('within-budget: an in-budget surface is a no-op that measures but writes no
   const seqBefore = session.seq;
 
   // 400 B represented against a 400 B budget: exactly at the limit.
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 400, minRetainImages: 0, retainSteps: 0, quanta: 4 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 400, minRetainImages: 0, retainSteps: 0, quanta: 4 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.action, 'noop');
@@ -923,7 +923,7 @@ test('minRetainImages: the newest occurrences are never selected', async () => {
   for (let step = 1; step <= 5; step += 1) seqs.push(appendImageStep(session, step, `att-${step}`));
 
   // 5 × 400 B = 2000 B; keep the newest 3 and demand 400 B: only 2 eligible.
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 400, minRetainImages: 3, retainSteps: 0, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 400, minRetainImages: 3, retainSteps: 0, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.plan.candidateCount, 2);
@@ -953,7 +953,7 @@ test('retainSteps: occurrences admitted in the recent window are never selected'
   assert.equal(recentStepBoundary(session, 2), 6);
   assert.ok(seqs[2] > 6 && seqs[3] > 6, 'the last two messages are inside the window');
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 2, quanta: 1 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 2, quanta: 1 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.plan.candidateCount, 2, 'only occurrences outside the window are eligible');
@@ -968,7 +968,7 @@ test('budget invariant: the represented payload fits whenever the eligible set c
   const session = ctx.sessions.create('budget');
   for (let step = 1; step <= 6; step += 1) appendImageStep(session, step, `att-${step}`);
 
-  const guard = createGuard(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1200, minRetainImages: 1, retainSteps: 0, quanta: 2 }));
+  const guard = createGuard(ctx, parseConfig({ maxRequestImageBytes: 1200, minRetainImages: 1, retainSteps: 0, quanta: 2 }));
   const decision = await guard.run(factsFor(session), RESOLVED);
 
   assert.equal(decision.plan.budgetSatisfied, true);
@@ -991,7 +991,7 @@ test('apply: the agent/request listener returns the config unchanged and decides
   const session = ctx.sessions.create('applied');
   appendImageStep(session, 1, 'att-1');
 
-  apply(ctx, ConfigSchema.parse({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
+  apply(ctx, parseConfig({ maxRequestImageBytes: 1, minRetainImages: 0, retainSteps: 0, quanta: 1 }));
 
   const resolved = { ...RESOLVED, maxTokens: 4096 };
   const returned = await ctx.waterfall(

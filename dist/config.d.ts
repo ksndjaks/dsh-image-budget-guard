@@ -1,85 +1,77 @@
-/**
- * Strict configuration for the image budget guard.
- *
- * The schema is a Zod object with `.strict()`: the Harness loader validates a
- * plugin's exported `Config` through the Standard Schema `~standard` interface
- * (`cordis/lib/index.js` → `resolveConfig` → `runtime.Config["~standard"].validate`),
- * and Zod 4 implements that interface. Unknown keys are therefore rejected at
- * load time, before `apply()` ever runs.
- *
- * @module @ksndjaks/dsh-image-budget-guard/config
- */
-import { z } from 'zod';
 /** Request representation a route uses for image occurrences. */
 export type RouteRepresentation = 'inline-base64' | 'files';
 /** Configured representation resolution; `auto` consults the route directory. */
 export type RepresentationSetting = 'auto' | RouteRepresentation;
-/** Which budget dimension a resolved route enforces. */
+/** Which budget dimension decides the wire cost. */
 export type BudgetDimension = 'bytes' | 'count';
 /** Diagnostics verbosity; the plugin never changes harness logging levels. */
 export declare const LOG_LEVELS: readonly ["silent", "error", "warn", "info", "debug"];
 export type LogLevel = (typeof LOG_LEVELS)[number];
 /**
- * Exact-route override. A route is identified by the `(provider, model)` pair
- * the request header carries; both fields are required so an override can
- * never silently apply to a different model on the same provider.
+ * Occurrence cap Mistral enforces per request.
+ *
+ * Mistral answers the 21st image with
+ * `400 {"message":"Total number of images exceeds the maximum allowed of 20."}`,
+ * so a byte budget alone cannot prevent that failure. {@link ConfigSchema}'s
+ * `mistralImageLimit` switch applies this cap to Mistral routes only.
  */
-export declare const RouteOverrideSchema: z.ZodObject<{
-    provider: z.ZodString;
-    model: z.ZodString;
-    enabled: z.ZodOptional<z.ZodBoolean>;
-    representation: z.ZodOptional<z.ZodEnum<{
-        "inline-base64": "inline-base64";
-        files: "files";
-    }>>;
-    imageCapable: z.ZodOptional<z.ZodBoolean>;
-    maxRequestImageBytes: z.ZodOptional<z.ZodNumber>;
-    maxRequestImages: z.ZodOptional<z.ZodNumber>;
-    minRetainImages: z.ZodOptional<z.ZodNumber>;
-    retainSteps: z.ZodOptional<z.ZodNumber>;
-    quanta: z.ZodOptional<z.ZodNumber>;
-}, z.core.$strict>;
+export declare const MISTRAL_IMAGE_LIMIT = 20;
+/**
+ * Exact-route override. A route is identified by the `(provider, model)` pair
+ * the request header carries; both fields are required so an override can never
+ * silently apply to a different model on the same provider.
+ */
+export declare const RouteOverrideSchema: Schemastery<RouteOverride>;
 /** Plugin configuration; every field is optional and defaulted. */
-export declare const ConfigSchema: z.ZodObject<{
-    enabled: z.ZodDefault<z.ZodBoolean>;
-    dryRun: z.ZodDefault<z.ZodBoolean>;
-    representation: z.ZodDefault<z.ZodEnum<{
-        "inline-base64": "inline-base64";
-        files: "files";
-        auto: "auto";
-    }>>;
-    maxRequestImageBytes: z.ZodDefault<z.ZodNumber>;
-    maxRequestImages: z.ZodDefault<z.ZodNumber>;
-    minRetainImages: z.ZodDefault<z.ZodNumber>;
-    retainSteps: z.ZodDefault<z.ZodNumber>;
-    quanta: z.ZodDefault<z.ZodNumber>;
-    perRoute: z.ZodDefault<z.ZodArray<z.ZodObject<{
-        provider: z.ZodString;
-        model: z.ZodString;
-        enabled: z.ZodOptional<z.ZodBoolean>;
-        representation: z.ZodOptional<z.ZodEnum<{
-            "inline-base64": "inline-base64";
-            files: "files";
-        }>>;
-        imageCapable: z.ZodOptional<z.ZodBoolean>;
-        maxRequestImageBytes: z.ZodOptional<z.ZodNumber>;
-        maxRequestImages: z.ZodOptional<z.ZodNumber>;
-        minRetainImages: z.ZodOptional<z.ZodNumber>;
-        retainSteps: z.ZodOptional<z.ZodNumber>;
-        quanta: z.ZodOptional<z.ZodNumber>;
-    }, z.core.$strict>>>;
-    logLevel: z.ZodDefault<z.ZodEnum<{
-        silent: "silent";
-        error: "error";
-        warn: "warn";
-        info: "info";
-        debug: "debug";
-    }>>;
-}, z.core.$strict>;
+export declare const ConfigSchema: Schemastery<ImageBudgetGuardConfig>;
 /** Validated plugin configuration. */
-export type ImageBudgetGuardConfig = z.output<typeof ConfigSchema>;
+export interface ImageBudgetGuardConfig {
+    readonly enabled: boolean;
+    readonly dryRun: boolean;
+    readonly representation: RepresentationSetting;
+    readonly maxRequestImageBytes: number;
+    readonly maxRequestImages: number;
+    readonly mistralImageLimit: boolean;
+    readonly minRetainImages: number;
+    readonly retainSteps: number;
+    readonly quanta: number;
+    readonly perRoute: RouteOverride[];
+    readonly logLevel: LogLevel;
+}
+/** One validated `perRoute` entry. */
+export interface RouteOverride {
+    readonly provider: string;
+    readonly model: string;
+    readonly enabled?: boolean;
+    readonly representation?: RouteRepresentation;
+    readonly imageCapable?: boolean;
+    readonly maxRequestImageBytes?: number;
+    readonly maxRequestImages?: number;
+    readonly minRetainImages?: number;
+    readonly retainSteps?: number;
+    readonly quanta?: number;
+}
 /** Raw plugin configuration as written by the operator. */
-export type ImageBudgetGuardConfigInput = z.input<typeof ConfigSchema>;
+export type ImageBudgetGuardConfigInput = Partial<ImageBudgetGuardConfig>;
+/**
+ * Reject keys the schema does not declare.
+ *
+ * Schemastery copies unknown keys into its result rather than failing, so this
+ * is the strict half of load-time validation: a typo in the profile patch fails
+ * the plugin with the exact path instead of being silently ignored.
+ *
+ * @param raw - configuration as the loader resolved it.
+ * @throws when an unknown top-level or `perRoute` key is present.
+ */
+export declare function assertKnownConfigKeys(raw: Record<string, unknown>): void;
+/**
+ * Validate one raw configuration and materialize every default.
+ *
+ * @param raw - configuration from the loader, the settings form, or a caller.
+ * @returns the frozen, fully defaulted configuration.
+ * @throws when a value is invalid or an unknown key is present.
+ */
+export declare function parseConfig(raw: unknown): ImageBudgetGuardConfig;
 /** Resolved budget policy for one exact provider/model route. */
 export interface RouteBudgetPolicy {
     readonly provider: string;
@@ -95,6 +87,17 @@ export interface RouteBudgetPolicy {
     readonly retainSteps: number;
     readonly quanta: number;
 }
+/**
+ * Whether a provider route is a Mistral route.
+ *
+ * The Mistral optimisation keys on the route id, because that is the only
+ * provider fact the request header carries. `mistral`, `mistral-cn`, and
+ * `Mistral_EU` all match; a gateway that renames the route does not.
+ *
+ * @param provider - provider route id from the request header.
+ * @returns true for a route named after Mistral.
+ */
+export declare function isMistralRoute(provider: string): boolean;
 /**
  * Resolve the effective policy for one exact route.
  *

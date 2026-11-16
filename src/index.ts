@@ -36,6 +36,7 @@ import { IMAGE_OFFLOAD_REQUIRED_CODE } from '@deepseek-ai/dsh-llm';
 import type { Session } from '@deepseek-ai/dsh-session';
 import {
   ConfigSchema,
+  parseConfig,
   resolveRouteBudget,
   routeCapabilityOverride,
   routeEnabled,
@@ -567,10 +568,11 @@ export function createGuard(ctx: Context, config: ImageBudgetGuardConfig): Guard
  * @param config - validated plugin configuration.
  */
 export function apply(ctx: Context, config: ImageBudgetGuardConfig): void {
-  // The loader already validated through `Config`, but a direct call (tests,
-  // embedded hosts) may pass a partial object; parsing again materializes the
-  // documented defaults and keeps both entry points identical.
-  const guard = createGuard(ctx, ConfigSchema.parse(config ?? {}));
+  // The loader validated through `Config` (schemastery), but a direct call
+  // (tests, embedded hosts) may pass a partial object, and schemastery merges
+  // unknown keys instead of rejecting them. parseConfig materializes the
+  // documented defaults and applies the strict unknown-key check.
+  const guard = createGuard(ctx, parseConfig(config));
 
   ctx.on(
     'agent/request',
@@ -621,7 +623,16 @@ export function apply(ctx: Context, config: ImageBudgetGuardConfig): void {
 
 export type { ImageBudgetGuardConfig, ImageBudgetGuardConfigInput, RouteBudgetPolicy } from './config.js';
 export type { ImageOccurrence, OffloadTarget, SelectionResult } from './select.js';
-export { ConfigSchema, resolveRouteBudget, routeEnabled, routeCapabilityOverride } from './config.js';
+export {
+  ConfigSchema,
+  MISTRAL_IMAGE_LIMIT,
+  assertKnownConfigKeys,
+  isMistralRoute,
+  parseConfig,
+  resolveRouteBudget,
+  routeCapabilityOverride,
+  routeEnabled,
+} from './config.js';
 export { planImageOffload, base64Length } from './select.js';
 export {
   IMAGE_OFFLOAD_EVENT,

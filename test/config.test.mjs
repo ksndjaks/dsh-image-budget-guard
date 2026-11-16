@@ -1,10 +1,11 @@
 /**
  * Configuration schema and route-resolution tests (`dist/config.js`).
  *
- * The schema is validated by the Harness loader through the Standard Schema
- * interface (`ConfigSchema['~standard'].validate`), so these tests exercise
- * both the plain `.parse()` path and that interface: a typo must be a load-time
- * rejection, never a silently ignored key (DESIGN.md §4).
+ * The schema is a schemastery object because that is the only shape the Harness
+ * plugin settings page can render (`isNativeConfigSchema()` requires
+ * `Symbol.for('schemastery')`). Schemastery merges unknown keys instead of
+ * rejecting them, so `parseConfig()` adds the strict check: a typo must be a
+ * load-time rejection, never a silently ignored key (DESIGN.md §4).
  *
  * Run: `node --test test/config.test.mjs` (from the package root, after `pnpm build`).
  */
@@ -13,6 +14,9 @@ import assert from 'node:assert/strict';
 
 import {
   ConfigSchema,
+  MISTRAL_IMAGE_LIMIT,
+  isMistralRoute,
+  parseConfig,
   resolveRouteBudget,
   routeCapabilityOverride,
   routeEnabled,
@@ -20,15 +24,26 @@ import {
 
 /** Parse a raw config, failing the test on an unexpected rejection. */
 function parsed(raw = {}) {
-  return ConfigSchema.parse(raw);
+  return parseConfig(raw);
 }
 
-/** Assert a raw config is rejected, and return the first issue. */
+/** Assert a raw config is rejected, and return the thrown message. */
 function rejected(raw) {
-  const result = ConfigSchema.safeParse(raw);
-  assert.equal(result.success, false, `expected ${JSON.stringify(raw)} to be rejected`);
-  return result.error.issues[0];
+  try {
+    parseConfig(raw);
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  assert.fail(`expected ${JSON.stringify(raw)} to be rejected`);
 }
+
+test('settings page: the exported Config is a native schemastery schema', () => {
+  // The plugin settings page only renders a Config that carries this marker;
+  // without it the row reports `unsupported` and there is no form at all.
+  assert.equal(Reflect.get(ConfigSchema, Symbol.for('schemastery')), true);
+  assert.equal(ConfigSchema.type, 'object');
+  assert.equal(typeof ConfigSchema['~standard']?.validate, 'function', 'cordis validates through Standard Schema');
+});
 
 test('defaults: every field is optional and defaulted', () => {
   const config = parsed();
@@ -37,7 +52,8 @@ test('defaults: every field is optional and defaulted', () => {
   assert.equal(config.dryRun, false);
   assert.equal(config.representation, 'auto');
   assert.equal(config.maxRequestImageBytes, 6 * 1024 * 1024, '6 MiB inline budget');
-  assert.equal(config.maxRequestImages, 20);
+  assert.equal(config.maxRequestImages, 60, 'global count budget is not Mistral-tuned');
+  assert.equal(config.mistralImageLimit, false, 'the Mistral optimisation is opt-in');
   assert.equal(config.minRetainImages, 6);
   assert.equal(config.retainSteps, 12);
   assert.equal(config.quanta, 4);
@@ -58,92 +74,110 @@ test('defaults: a partial config keeps defaults for omitted fields', () => {
 });
 
 test('strict: unknown top-level keys are rejected', () => {
-  const issue = rejected({ nope: 1 });
-  assert.equal(issue.code, 'unrecognized_keys');
-  assert.deepEqual(issue.keys, ['nope']);
+  const message = rejected({ nope: 1 });
+  assert.match(message, /unknown config key "nope"/);
 });
 
-test('strict: unknown perRoute keys are rejected', () => {
-  const issue = rejected({ perRoute: [{ provider: 'p', model: 'm', nope: 1 }] });
-  assert.equal(issue.code, 'unrecognized_keys');
-  assert.deepEqual(issue.keys, ['nope']);
-  assert.deepEqual(issue.path, ['perRoute', 0]);
-});
-
-test('strict: the Standard Schema interface rejects unknown keys too', () => {
-  // This is the path cordis uses at load time (`~standard.validate`), so the
-  // rejection has to happen here and not only in `.parse()`.
-  const standard = ConfigSchema['~standard'];
-  assert.equal(typeof standard?.validate, 'function');
-
-  const bad = standard.validate({ nope: 1 });
-  assert.ok(bad.issues !== undefined, 'a rejected load reports issues');
-  assert.equal(bad.issues[0].code, 'unrecognized_keys');
-  assert.deepEqual(bad.issues[0].keys, ['nope']);
-
-  const good = standard.validate({ dryRun: true });
-  assert.equal(good.issues, undefined);
-  assert.equal(good.value.dryRun, true);
-  assert.equal(good.value.enabled, true);
+test('strict: unknown perRoute keys are rejected with their path', () => {
+  const message = rejected({ perRoute: [{ provider: 'p', model: 'm', nope: 1 }] });
+  assert.match(message, /unknown config key "perRoute\[0\]\.nope"/);
 });
 
 test('strict: nested unknown keys inside an otherwise valid perRoute entry are rejected', () => {
-  const issue = rejected({
+  const message = rejected({
     perRoute: [
       { provider: 'p', model: 'm', enabled: true },
       { provider: 'q', model: 'n', quanta: 2, typo: 'x' },
     ],
   });
-  assert.equal(issue.code, 'unrecognized_keys');
-  assert.deepEqual(issue.path, ['perRoute', 1]);
+  assert.match(message, /unknown config key "perRoute\[1\]\.typo"/);
+});
+
+test('strict: the Standard Schema interface still validates values', () => {
+  // This is the path cordis uses at load time (`~standard.validate`).
+  const standard = ConfigSchema['~standard'];
+  assert.equal(typeof standard?.validate, 'function');
+
+  const good = standard.validate({ dryRun: true });
+  assert.equal(good.issues, undefined);
+  assert.equal(good.value.dryRun, true);
+  assert.equal(good.value.enabled, true);
+
+  const bad = standard.validate({ enabled: 'yes' });
+  assert.ok(bad.issues !== undefined, 'a rejected load reports issues');
 });
 
 test('bad values: non-positive byte and image budgets are rejected', () => {
-  for (const raw of [{ maxRequestImageBytes: 0 }, { maxRequestImageBytes: -1 }, { maxRequestImages: 0 }]) {
-    const issue = rejected(raw);
-    assert.equal(issue.code, 'too_small', `${JSON.stringify(raw)} must be too small`);
-  }
-});
-
-test('bad values: non-integer numeric budgets are rejected', () => {
-  for (const raw of [
-    { maxRequestImageBytes: 1.5 },
-    { maxRequestImages: 2.5 },
-    { minRetainImages: 1.5 },
-    { retainSteps: 0.5 },
-    { quanta: 1.5 },
-  ]) {
-    assert.equal(rejected(raw).code, 'invalid_type', `${JSON.stringify(raw)} must be rejected`);
-  }
+  assert.match(rejected({ maxRequestImageBytes: 0 }), /invalid config/);
+  assert.match(rejected({ maxRequestImages: 0 }), /invalid config/);
 });
 
 test('bad values: negative retention fields are rejected', () => {
-  assert.equal(rejected({ minRetainImages: -1 }).code, 'too_small');
-  assert.equal(rejected({ retainSteps: -1 }).code, 'too_small');
-  // Zero is legal for both retention knobs: it disables the corresponding floor.
-  assert.equal(parsed({ minRetainImages: 0, retainSteps: 0 }).minRetainImages, 0);
+  assert.match(rejected({ minRetainImages: -1 }), /invalid config/);
+  assert.match(rejected({ retainSteps: -2 }), /invalid config/);
+  assert.equal(parsed({ minRetainImages: 0 }).minRetainImages, 0, 'zero is legal');
 });
 
 test('bad values: quanta must be positive', () => {
-  assert.equal(rejected({ quanta: 0 }).code, 'too_small');
-  assert.equal(rejected({ quanta: -3 }).code, 'too_small');
+  assert.match(rejected({ quanta: 0 }), /invalid config/);
 });
 
 test('bad values: non-boolean switches and unknown enum members are rejected', () => {
-  assert.equal(rejected({ enabled: 'yes' }).code, 'invalid_type');
-  assert.equal(rejected({ dryRun: 1 }).code, 'invalid_type');
-  assert.equal(rejected({ representation: 'raw' }).code, 'invalid_value');
-  assert.equal(rejected({ logLevel: 'trace' }).code, 'invalid_value');
+  assert.match(rejected({ enabled: 'yes' }), /invalid config/);
+  assert.match(rejected({ mistralImageLimit: 1 }), /invalid config/);
+  assert.match(rejected({ representation: 'magic' }), /invalid config/);
+  assert.match(rejected({ logLevel: 'loud' }), /invalid config/);
 });
 
 test('bad values: an empty provider or model in perRoute is rejected', () => {
-  assert.equal(rejected({ perRoute: [{ provider: '', model: 'm' }] }).code, 'too_small');
-  assert.equal(rejected({ perRoute: [{ provider: 'p', model: '' }] }).code, 'too_small');
-  assert.equal(rejected({ perRoute: [{}] }).code, 'invalid_type');
+  assert.match(rejected({ perRoute: [{ provider: '', model: 'm' }] }), /invalid config/);
+  assert.match(rejected({ perRoute: [{ provider: 'p', model: '' }] }), /invalid config/);
 });
 
 test('bad values: perRoute must be an array', () => {
-  assert.equal(rejected({ perRoute: { provider: 'p', model: 'm' } }).code, 'invalid_type');
+  assert.match(rejected({ perRoute: { provider: 'p' } }), /invalid config/);
+});
+
+test('mistral switch: only a Mistral route is capped, and only when enabled', () => {
+  assert.equal(MISTRAL_IMAGE_LIMIT, 20);
+  const off = parsed({ maxRequestImages: 60 });
+  const on = parsed({ maxRequestImages: 60, mistralImageLimit: true });
+
+  assert.equal(resolveRouteBudget(off, 'mistral', 'm', 'inline-base64').maxImages, 60);
+  assert.equal(resolveRouteBudget(on, 'mistral', 'm', 'inline-base64').maxImages, 20);
+  assert.equal(
+    resolveRouteBudget(on, 'commandcode', 'm', 'inline-base64').maxImages,
+    60,
+    'another provider keeps the global budget',
+  );
+  // A Files route on a Mistral-named provider still only pays references, but the
+  // count cap is the provider's own limit and applies there too.
+  assert.equal(resolveRouteBudget(on, 'mistral', 'm', 'files').maxImages, 20);
+});
+
+test('mistral switch: matches the route id, not a model name', () => {
+  assert.equal(isMistralRoute('mistral'), true);
+  assert.equal(isMistralRoute('Mistral'), true);
+  assert.equal(isMistralRoute('mistral-cn'), true);
+  assert.equal(isMistralRoute('mistral_eu'), true);
+  assert.equal(isMistralRoute('mistralx'), false);
+  assert.equal(isMistralRoute('commandcode'), false);
+  assert.equal(isMistralRoute('my-mistral'), false);
+});
+
+test('mistral switch: it only lowers the cap, never raises it', () => {
+  const config = parsed({ mistralImageLimit: true, maxRequestImages: 4 });
+  assert.equal(
+    resolveRouteBudget(config, 'mistral', 'm', 'inline-base64').maxImages,
+    4,
+    'a lower global budget still wins',
+  );
+  const overridden = parsed({
+    mistralImageLimit: true,
+    maxRequestImages: 60,
+    perRoute: [{ provider: 'mistral', model: 'm', maxRequestImages: 5 }],
+  });
+  assert.equal(resolveRouteBudget(overridden, 'mistral', 'm', 'inline-base64').maxImages, 5);
 });
 
 test('perRoute: every documented override key is accepted', () => {

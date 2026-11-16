@@ -42,7 +42,7 @@ import { SessionStore } from '@deepseek-ai/dsh-session';
 import { LocalAttachmentStore } from '@deepseek-ai/dsh-attachment-local';
 import * as piAi from '@deepseek-ai/dsh-llm-pi-ai';
 
-import { ConfigSchema, base64Length, createGuard, surfaceImageOccurrences } from '../dist/index.js';
+import { base64Length, createGuard, parseConfig, surfaceImageOccurrences } from '../dist/index.js';
 import {
   classifyImageHandles,
   firstOffloadIndex,
@@ -216,7 +216,7 @@ test('image-budget guard keeps real pi-ai request bodies under 6 MiB while the u
   // ---------------------------------------------------------------------------
   const guard = createGuard(
     ctx,
-    ConfigSchema.parse({
+    parseConfig({
       maxRequestImageBytes: GUARD_BUDGET,
       minRetainImages: 6,
       retainSteps: 0,

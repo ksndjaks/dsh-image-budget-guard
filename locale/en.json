@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Image budget guard",
+    "description": "Trims the oldest request images on the session surface before a model request is assembled, so an inline base64 body never grows into the range that makes requests slow, flaky, or rejected.",
+    "detail": "docs/DETAIL.md"
+  }
+}

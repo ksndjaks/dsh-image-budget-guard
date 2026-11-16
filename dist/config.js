@@ -1,67 +1,189 @@
 /**
  * Strict configuration for the image budget guard.
  *
- * The schema is a Zod object with `.strict()`: the Harness loader validates a
- * plugin's exported `Config` through the Standard Schema `~standard` interface
- * (`cordis/lib/index.js` → `resolveConfig` → `runtime.Config["~standard"].validate`),
- * and Zod 4 implements that interface. Unknown keys are therefore rejected at
- * load time, before `apply()` ever runs.
+ * The schema is a **schemastery** object, not a Zod object, because that is the
+ * only shape the Harness plugin settings page can render: `isNativeConfigSchema()`
+ * in `@deepseek-ai/dsh-app-boot` requires `Symbol.for('schemastery')` on the
+ * exported `Config`, and a schema that fails that check is reported as
+ * `unsupported`, leaving the plugin with no form at all. Schemastery also
+ * implements the Standard Schema `~standard` interface cordis validates through,
+ * so load-time validation is unchanged.
+ *
+ * Schemastery merges unknown keys instead of rejecting them, so
+ * {@link parseConfig} adds the strict check the loader cannot express: an unknown
+ * key fails the plugin at load time with the offending path.
  *
  * @module @ksndjaks/dsh-image-budget-guard/config
  */
-import { z } from 'zod';
+import z from '@deepseek-ai/schemastery';
 /** Diagnostics verbosity; the plugin never changes harness logging levels. */
 export const LOG_LEVELS = ['silent', 'error', 'warn', 'info', 'debug'];
-const positiveInteger = z.number().int().positive();
-const nonNegativeInteger = z.number().int().nonnegative();
+/**
+ * Occurrence cap Mistral enforces per request.
+ *
+ * Mistral answers the 21st image with
+ * `400 {"message":"Total number of images exceeds the maximum allowed of 20."}`,
+ * so a byte budget alone cannot prevent that failure. {@link ConfigSchema}'s
+ * `mistralImageLimit` switch applies this cap to Mistral routes only.
+ */
+export const MISTRAL_IMAGE_LIMIT = 20;
+const representationSetting = z
+    .union([z.const('auto'), z.const('inline-base64'), z.const('files')])
+    .default('auto')
+    .description('预算维度判定方式。auto 依据已挂载的适配器目录推断：llm-pi-ai 视为内联 base64（按字节），llm-deepseek 视为 Files（按数量）；推断不出时保守按字节。');
 /**
  * Exact-route override. A route is identified by the `(provider, model)` pair
- * the request header carries; both fields are required so an override can
- * never silently apply to a different model on the same provider.
+ * the request header carries; both fields are required so an override can never
+ * silently apply to a different model on the same provider.
  */
-export const RouteOverrideSchema = z
-    .object({
-    provider: z.string().min(1),
-    model: z.string().min(1),
-    enabled: z.boolean().optional(),
-    /** Force a representation when the route directory cannot prove one. */
-    representation: z.enum(['inline-base64', 'files']).optional(),
-    /** Force image capability when the adapter's modalities are unknown. */
-    imageCapable: z.boolean().optional(),
-    maxRequestImageBytes: positiveInteger.optional(),
-    maxRequestImages: positiveInteger.optional(),
-    minRetainImages: nonNegativeInteger.optional(),
-    retainSteps: nonNegativeInteger.optional(),
-    quanta: positiveInteger.optional(),
-})
-    .strict();
+export const RouteOverrideSchema = z.object({
+    provider: z.string().min(1).required().description('供应商路由 id，精确匹配。'),
+    model: z.string().min(1).required().description('模型 id，精确匹配。'),
+    enabled: z.boolean().description('该路由是否参与裁剪；false 时完全跳过。'),
+    representation: z
+        .union([z.const('inline-base64'), z.const('files')])
+        .description('强制该路由的表示形式，覆盖自动探测。'),
+    imageCapable: z.boolean().description('强制该路由是否具备图片能力，覆盖适配器声明的模态。'),
+    maxRequestImageBytes: z.natural().min(1).description('该路由的字节预算，覆盖全局值。'),
+    maxRequestImages: z.natural().min(1).description('该路由的数量预算，覆盖全局值。'),
+    minRetainImages: z.natural().description('该路由保留的最新图片张数，覆盖全局值。'),
+    retainSteps: z.natural().description('该路由的逐字保留步数窗口，覆盖全局值。'),
+    quanta: z.natural().min(1).description('该路由单次决策至少省略的出现位置数，覆盖全局值。'),
+});
 /** Plugin configuration; every field is optional and defaulted. */
-export const ConfigSchema = z
-    .object({
-    /** Master switch. `false` makes every request hook a no-op. */
-    enabled: z.boolean().default(true),
-    /** Decide and log, but never append an `image/offload` event. */
-    dryRun: z.boolean().default(false),
-    /**
-     * Representation used when neither the route override nor the route
-     * directory resolves one. `inline-base64` is the conservative fallback:
-     * the byte budget is an upper bound on what an inline route sends.
-     */
-    representation: z.enum(['auto', 'inline-base64', 'files']).default('auto'),
-    /** Inline base64 route budget: accumulated encoded request bytes (default 6 MiB). */
-    maxRequestImageBytes: positiveInteger.default(6 * 1024 * 1024),
-    maxRequestImages: positiveInteger.default(20),
-    /** Newest occurrences that are never omitted (default 6). */
-    minRetainImages: nonNegativeInteger.default(6),
-    /** Images admitted within the last N steps are never omitted (default 12). */
-    retainSteps: nonNegativeInteger.default(12),
-    /** Minimum occurrences omitted per decision (default 4). */
-    quanta: positiveInteger.default(4),
-    /** Exact provider/model overrides; later entries win for the same pair. */
-    perRoute: z.array(RouteOverrideSchema).default([]),
-    logLevel: z.enum(LOG_LEVELS).default('info'),
-})
-    .strict();
+export const ConfigSchema = z.object({
+    enabled: z.boolean().default(true).description('总开关。关闭后所有请求钩子直接返回，不写任何事件。'),
+    dryRun: z
+        .boolean()
+        .default(false)
+        .description('只决策与记录，不写会话事件。用于先观察将省略哪些图片。'),
+    representation: representationSetting,
+    maxRequestImageBytes: z
+        .natural()
+        .min(1)
+        .default(6 * 1024 * 1024)
+        .description('内联 base64 路由的字节预算：单次请求累计的编码字节。应不高于适配器自身的 maxRequestImageBytes（llm-pi-ai 默认 20 MiB）。'),
+    maxRequestImages: z
+        .natural()
+        .min(1)
+        .default(60)
+        .description('出现位置数量预算。内联路由与字节预算同时生效（取更严者），Files 路由只按数量。DeepSeek 的 /v1/files 允许 600 张，可按需调高。'),
+    mistralImageLimit: z
+        .boolean()
+        .default(false)
+        .description('针对 Mistral 供应商的单独优化：启用后，Mistral 路由的图片数量上限固定为 20 张（Mistral 会拒绝第 21 张图，即使请求体只有几 MiB）。只影响 provider 名为 mistral 的路由，其他供应商不受影响。'),
+    minRetainImages: z
+        .natural()
+        .default(6)
+        .description('永远不省略的最新图片张数。保留下限 = 该值 × 单图请求字节，且优先于预算：无法满足预算时只记录 budget-unsatisfiable，不破坏下限。'),
+    retainSteps: z
+        .natural()
+        .default(12)
+        .description('最近 N 步内出现的图片不省略（0 表示只保留 minRetainImages 下限）。注意它以整条消息为单位保护，一次粘贴 N 张会一次性钉住 N 个位置。'),
+    quanta: z
+        .natural()
+        .min(1)
+        .default(4)
+        .description('单次决策至少省略的出现位置数；候选不足时例外。值越大，请求前缀被重写的次数越少。'),
+    perRoute: z
+        .array(RouteOverrideSchema)
+        .default([])
+        .description('按 (provider, model) 精确覆盖；同一对以最后一条为准。'),
+    logLevel: z
+        .union(LOG_LEVELS.map((level) => z.const(level)))
+        .default('info')
+        .description('日志级别。注意 warn 记录走 info 通道（DSH 默认只收集 error/info）。'),
+});
+/** Top-level keys the schema accepts. */
+const CONFIG_KEYS = new Set([
+    'enabled',
+    'dryRun',
+    'representation',
+    'maxRequestImageBytes',
+    'maxRequestImages',
+    'mistralImageLimit',
+    'minRetainImages',
+    'retainSteps',
+    'quanta',
+    'perRoute',
+    'logLevel',
+]);
+/** Keys one `perRoute` entry accepts. */
+const ROUTE_KEYS = new Set([
+    'provider',
+    'model',
+    'enabled',
+    'representation',
+    'imageCapable',
+    'maxRequestImageBytes',
+    'maxRequestImages',
+    'minRetainImages',
+    'retainSteps',
+    'quanta',
+]);
+/**
+ * Reject keys the schema does not declare.
+ *
+ * Schemastery copies unknown keys into its result rather than failing, so this
+ * is the strict half of load-time validation: a typo in the profile patch fails
+ * the plugin with the exact path instead of being silently ignored.
+ *
+ * @param raw - configuration as the loader resolved it.
+ * @throws when an unknown top-level or `perRoute` key is present.
+ */
+export function assertKnownConfigKeys(raw) {
+    for (const key of Object.keys(raw)) {
+        if (!CONFIG_KEYS.has(key))
+            throw new Error(`image-budget-guard: unknown config key "${key}"`);
+    }
+    const routes = raw['perRoute'];
+    if (!Array.isArray(routes))
+        return;
+    routes.forEach((route, index) => {
+        if (typeof route !== 'object' || route === null || Array.isArray(route))
+            return;
+        for (const key of Object.keys(route)) {
+            if (!ROUTE_KEYS.has(key)) {
+                throw new Error(`image-budget-guard: unknown config key "perRoute[${index}].${key}"`);
+            }
+        }
+    });
+}
+/**
+ * Validate one raw configuration and materialize every default.
+ *
+ * @param raw - configuration from the loader, the settings form, or a caller.
+ * @returns the frozen, fully defaulted configuration.
+ * @throws when a value is invalid or an unknown key is present.
+ */
+export function parseConfig(raw) {
+    const input = raw === undefined || raw === null ? {} : raw;
+    let value;
+    try {
+        // A schemastery schema is callable: it returns the resolved value or throws.
+        value = ConfigSchema(input);
+    }
+    catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`image-budget-guard: invalid config: ${detail}`);
+    }
+    const record = value;
+    assertKnownConfigKeys(record);
+    return record;
+}
+/**
+ * Whether a provider route is a Mistral route.
+ *
+ * The Mistral optimisation keys on the route id, because that is the only
+ * provider fact the request header carries. `mistral`, `mistral-cn`, and
+ * `Mistral_EU` all match; a gateway that renames the route does not.
+ *
+ * @param provider - provider route id from the request header.
+ * @returns true for a route named after Mistral.
+ */
+export function isMistralRoute(provider) {
+    return /^mistral(?:[-_]|$)/i.test(provider);
+}
 /**
  * Resolve the effective policy for one exact route.
  *
@@ -84,12 +206,17 @@ export function resolveRouteBudget(config, provider, model, representationHint) 
     // `dimension` names the bound that decides the wire cost: inline routes pay
     // bytes, Files routes pay a reference per occurrence. It does NOT switch the
     // other bound off. A provider can cap the body size and the image count
-    // independently — Mistral answers 21 occurrences with
-    // "Total number of images exceeds the maximum allowed of 20" while the body
-    // is still a few MiB — so an inline route enforces both bounds and the
-    // stricter one wins. A Files route keeps `maxBytes` unbounded because its
-    // occurrences cost ids, not bytes.
+    // independently — Mistral answers 21 occurrences with "Total number of images
+    // exceeds the maximum allowed of 20" while the body is still a few MiB — so an
+    // inline route enforces both bounds and the stricter one wins. A Files route
+    // keeps `maxBytes` unbounded because its occurrences cost ids, not bytes.
     const dimension = representation === 'files' ? 'count' : 'bytes';
+    const configuredMaxImages = override?.maxRequestImages ?? config.maxRequestImages;
+    // The Mistral switch only lowers the cap; an explicit perRoute value above it
+    // still cannot lift the provider's own limit.
+    const maxImages = config.mistralImageLimit && isMistralRoute(provider)
+        ? Math.min(configuredMaxImages, MISTRAL_IMAGE_LIMIT)
+        : configuredMaxImages;
     return Object.freeze({
         provider,
         model,
@@ -98,7 +225,7 @@ export function resolveRouteBudget(config, provider, model, representationHint) 
         maxBytes: representation === 'files'
             ? Number.POSITIVE_INFINITY
             : (override?.maxRequestImageBytes ?? config.maxRequestImageBytes),
-        maxImages: override?.maxRequestImages ?? config.maxRequestImages,
+        maxImages,
         minRetainImages: override?.minRetainImages ?? config.minRetainImages,
         retainSteps: override?.retainSteps ?? config.retainSteps,
         quanta: override?.quanta ?? config.quanta,
