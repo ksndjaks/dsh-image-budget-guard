@@ -17,6 +17,7 @@ import {
   MISTRAL_IMAGE_LIMIT,
   isMistralRoute,
   parseConfig,
+  readConfig,
   resolveRouteBudget,
   routeCapabilityOverride,
   routeEnabled,
@@ -107,6 +108,41 @@ test('strict: the Standard Schema interface still validates values', () => {
 
   const bad = standard.validate({ enabled: 'yes' });
   assert.ok(bad.issues !== undefined, 'a rejected load reports issues');
+});
+
+test('loader shape: parseConfig accepts the resolved config whose volatile fields are references', () => {
+  // This is what apply() receives: the loader resolves the schema first, so every
+  // volatile field is a { get() } reference rather than the scalar its schema
+  // expects. Validating that shape directly fails with
+  // "$.enabled expected boolean but got [object Object]".
+  const resolved = ConfigSchema['~standard'].validate({}).value;
+  assert.equal(typeof resolved.enabled?.get, 'function', 'the loader hands over references');
+  assert.equal(typeof resolved.mistralImageLimit?.get, 'function');
+
+  const parsed = parseConfig(resolved);
+  assert.equal(parsed.enabled, true);
+  assert.equal(parsed.mistralImageLimit, false);
+  assert.equal(parsed.maxRequestImages, 60);
+  assert.equal(typeof parsed.enabled, 'boolean', 'references are unwrapped to plain values');
+});
+
+test('loader shape: a live write to a reference is visible through readConfig', () => {
+  const write = Symbol.for('cosmokit.volatile.write');
+  const resolved = ConfigSchema['~standard'].validate({}).value;
+  assert.equal(readConfig(resolved).mistralImageLimit, false);
+
+  // The loader commits a settings change by writing the reference in place.
+  resolved.mistralImageLimit[write](true);
+  resolved.maxRequestImages[write](20);
+
+  const live = readConfig(resolved);
+  assert.equal(live.mistralImageLimit, true, 'a settings change applies without a restart');
+  assert.equal(live.maxRequestImages, 20);
+  assert.equal(
+    resolveRouteBudget(live, 'mistral', 'm', 'inline-base64').maxImages,
+    20,
+    'the live value reaches route resolution',
+  );
 });
 
 test('bad values: non-positive byte and image budgets are rejected', () => {

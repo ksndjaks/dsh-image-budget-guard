@@ -76,10 +76,28 @@ export type ImageBudgetGuardConfigInput = Partial<ImageBudgetGuardConfig>;
  */
 export declare function assertKnownConfigKeys(raw: Record<string, unknown>): void;
 /**
+ * Read the live configuration without re-validating it.
+ *
+ * The loader hands `apply()` a resolved configuration in which every volatile
+ * field is a `{ get() }` reference, and a settings change updates that reference
+ * in place rather than remounting the plugin (cordis tutorial, "Volatile
+ * fields"). Reading through this function on each request is what makes the
+ * settings page take effect without a restart.
+ *
+ * @param raw - the resolved configuration the guard was mounted with.
+ * @returns the current plain configuration.
+ */
+export declare function readConfig(raw: unknown): ImageBudgetGuardConfig;
+/**
  * Validate one raw configuration and materialize every default.
  *
+ * Accepts both shapes callers actually pass: a raw object (tests, embedded
+ * hosts) and the loader's resolved object whose volatile fields are references.
+ * References are unwrapped *before* validation, because a reference is not the
+ * scalar its schema expects.
+ *
  * @param raw - configuration from the loader, the settings form, or a caller.
- * @returns the frozen, fully defaulted configuration.
+ * @returns the fully defaulted configuration with plain values.
  * @throws when a value is invalid or an unknown key is present.
  */
 export declare function parseConfig(raw: unknown): ImageBudgetGuardConfig;

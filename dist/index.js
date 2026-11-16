@@ -1,5 +1,5 @@
 import { IMAGE_OFFLOAD_REQUIRED_CODE } from '@deepseek-ai/dsh-llm';
-import { ConfigSchema, parseConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
+import { ConfigSchema, parseConfig, readConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
 import { base64Length, planImageOffload, } from './select.js';
 import { appendImageOffloadDecision, ensureImageOffloadProjection, isCompactionInProgress, recentStepBoundary, surfaceImageOccurrences, validateOffloadTargets, } from './projection.js';
 /**
@@ -201,7 +201,10 @@ function describeSelection(occurrences, targets) {
  * @returns the decision taken.
  */
 export async function runGuard(state, facts, resolved) {
-    const { config, log } = state;
+    const { log } = state;
+    // Volatile fields update in place; read them per request so a settings change
+    // applies without a restart.
+    const config = readConfig(state.config);
     const provider = resolved.provider;
     const model = resolved.model;
     if (!config.enabled)
@@ -373,10 +376,11 @@ export async function runGuard(state, facts, resolved) {
  * the exact decision path without booting an agent loop.
  */
 export function createGuard(ctx, config) {
+    const initial = readConfig(config);
     const state = {
         ctx,
-        config,
-        log: createLogger(ctx, config.logLevel),
+        config: config,
+        log: createLogger(ctx, initial.logLevel),
         sizeCache: new Map(),
         modelInfoCache: new Map(),
         representationCache: new Map(),
@@ -408,7 +412,8 @@ export function apply(ctx, config) {
     // (tests, embedded hosts) may pass a partial object, and schemastery merges
     // unknown keys instead of rejecting them. parseConfig materializes the
     // documented defaults and applies the strict unknown-key check.
-    const guard = createGuard(ctx, parseConfig(config));
+    parseConfig(config);
+    const guard = createGuard(ctx, config);
     ctx.on('agent/request', async (payload, next) => {
         const resolved = await next();
         try {
@@ -448,7 +453,7 @@ export function apply(ctx, config) {
         return next();
     });
 }
-export { ConfigSchema, MISTRAL_IMAGE_LIMIT, assertKnownConfigKeys, isMistralRoute, parseConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
+export { ConfigSchema, MISTRAL_IMAGE_LIMIT, assertKnownConfigKeys, isMistralRoute, parseConfig, readConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
 export { planImageOffload, base64Length } from './select.js';
 export { IMAGE_OFFLOAD_EVENT, appendImageOffloadDecision, ensureImageOffloadProjection, hasImageOffloadProjection, isCompactionInProgress, recentStepBoundary, surfaceImageOccurrences, validateOffloadTargets, } from './projection.js';
 //# sourceMappingURL=index.js.map

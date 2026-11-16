@@ -130,7 +130,7 @@ export interface Guard {
  * Build one guard instance. Kept separate from {@link apply} so tests can drive
  * the exact decision path without booting an agent loop.
  */
-export declare function createGuard(ctx: Context, config: ImageBudgetGuardConfig): Guard;
+export declare function createGuard(ctx: Context, config: ImageBudgetGuardConfig | unknown): Guard;
 /**
  * Mount the guard.
  *
@@ -145,7 +145,7 @@ export declare function createGuard(ctx: Context, config: ImageBudgetGuardConfig
 export declare function apply(ctx: Context, config: ImageBudgetGuardConfig): void;
 export type { ImageBudgetGuardConfig, ImageBudgetGuardConfigInput, RouteBudgetPolicy } from './config.js';
 export type { ImageOccurrence, OffloadTarget, SelectionResult } from './select.js';
-export { ConfigSchema, MISTRAL_IMAGE_LIMIT, assertKnownConfigKeys, isMistralRoute, parseConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
+export { ConfigSchema, MISTRAL_IMAGE_LIMIT, assertKnownConfigKeys, isMistralRoute, parseConfig, readConfig, resolveRouteBudget, routeCapabilityOverride, routeEnabled, } from './config.js';
 export { planImageOffload, base64Length } from './select.js';
 export { IMAGE_OFFLOAD_EVENT, appendImageOffloadDecision, ensureImageOffloadProjection, hasImageOffloadProjection, isCompactionInProgress, recentStepBoundary, surfaceImageOccurrences, validateOffloadTargets, } from './projection.js';
 //# sourceMappingURL=index.d.ts.map

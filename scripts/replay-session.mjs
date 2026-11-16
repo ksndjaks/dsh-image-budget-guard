@@ -56,7 +56,7 @@ import { requiredImageOffload, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-l
 import { requestImageDimensions } from '@deepseek-ai/dsh-attachment';
 import { LocalAttachmentStore } from '@deepseek-ai/dsh-attachment-local';
 
-import { ConfigSchema, base64Length, createGuard, resolveRouteBudget, surfaceImageOccurrences } from '../dist/index.js';
+import { base64Length, createGuard, parseConfig, resolveRouteBudget, surfaceImageOccurrences } from '../dist/index.js';
 import {
   DEFAULT_PROJECTIONS,
   SessionPlayer,
@@ -576,7 +576,7 @@ async function runFloorSweep({ header, events, runtime, scenario }) {
   const grid = [];
   for (const minRetainImages of FLOOR_SWEEP.minRetainImages) {
     for (const retainSteps of FLOOR_SWEEP.retainSteps) {
-      const config = ConfigSchema.parse({
+      const config = parseConfig({
         representation: 'inline-base64',
         logLevel: 'silent',
         minRetainImages,
@@ -1463,7 +1463,7 @@ async function main() {
       const adapter = new ScenarioAdapter(scenario);
       ctx.llm.registerAdapter([ROUTE.provider], adapter);
       const store = new CountingAttachmentStore(ctx, { dshHome: isolation.home });
-      const config = ConfigSchema.parse({
+      const config = parseConfig({
         representation: 'inline-base64',
         logLevel: 'silent',
         ...scenario.guardOverrides,
@@ -1579,7 +1579,7 @@ async function main() {
         writesUserCache: false,
       },
       guard: {
-        baseConfig: ConfigSchema.parse({ representation: 'inline-base64', logLevel: 'silent' }),
+        baseConfig: parseConfig({ representation: 'inline-base64', logLevel: 'silent' }),
         scenarioConfigs: Object.fromEntries(scenarios.map((s) => [s.id, s.config])),
       },
       warnings: warningsOut,

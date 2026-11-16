@@ -347,7 +347,7 @@ async function checkRuntimeMount() {
   llm.registerAdapter(['verifyroute'], new VerifyAdapter(policy));
 
   const plugin = await import(pathToFileURL(join(PACKAGE_ROOT, 'dist', 'index.js')).href);
-  const config = plugin.ConfigSchema.parse({
+  const config = plugin.parseConfig({
     // Eight ~226 KiB request versions: the newest two are protected by
     // minRetainImages, so the budget must sit above their combined size for the
     // decision to be satisfiable (this also exercises the retention floor).

@@ -173,12 +173,12 @@ export function assertKnownConfigKeys(raw) {
         }
     });
 }
-/** Cordis marks a volatile wrapper with this write symbol. */
+/** Cordis marks a volatile reference with this write symbol. */
 const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write');
 /**
- * Read a volatile field's current value.
+ * Read one field, unwrapping a volatile reference.
  *
- * @param value - a resolved field, possibly a cordis volatile wrapper.
+ * @param value - a resolved field, possibly a cordis volatile reference.
  * @returns the plain value.
  */
 function unwrapVolatile(value) {
@@ -192,14 +192,50 @@ function unwrapVolatile(value) {
     return candidate.get();
 }
 /**
+ * Unwrap every top-level field of a resolved configuration.
+ *
+ * @param raw - a configuration object, possibly holding volatile references.
+ * @returns a plain object; `{}` for a non-object input.
+ */
+function unwrapRecord(raw) {
+    if (raw === null || typeof raw !== 'object')
+        return {};
+    const result = {};
+    for (const [key, value] of Object.entries(raw)) {
+        result[key] = unwrapVolatile(value);
+    }
+    return result;
+}
+/**
+ * Read the live configuration without re-validating it.
+ *
+ * The loader hands `apply()` a resolved configuration in which every volatile
+ * field is a `{ get() }` reference, and a settings change updates that reference
+ * in place rather than remounting the plugin (cordis tutorial, "Volatile
+ * fields"). Reading through this function on each request is what makes the
+ * settings page take effect without a restart.
+ *
+ * @param raw - the resolved configuration the guard was mounted with.
+ * @returns the current plain configuration.
+ */
+export function readConfig(raw) {
+    return unwrapRecord(raw);
+}
+/**
  * Validate one raw configuration and materialize every default.
  *
+ * Accepts both shapes callers actually pass: a raw object (tests, embedded
+ * hosts) and the loader's resolved object whose volatile fields are references.
+ * References are unwrapped *before* validation, because a reference is not the
+ * scalar its schema expects.
+ *
  * @param raw - configuration from the loader, the settings form, or a caller.
- * @returns the frozen, fully defaulted configuration.
+ * @returns the fully defaulted configuration with plain values.
  * @throws when a value is invalid or an unknown key is present.
  */
 export function parseConfig(raw) {
-    const input = raw === undefined || raw === null ? {} : raw;
+    const input = unwrapRecord(raw === undefined || raw === null ? {} : raw);
+    assertKnownConfigKeys(input);
     let value;
     try {
         // A schemastery schema is callable: it returns the resolved value or throws.
@@ -209,14 +245,8 @@ export function parseConfig(raw) {
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(`image-budget-guard: invalid config: ${detail}`);
     }
-    const record = value;
-    assertKnownConfigKeys(record);
-    // A volatile field resolves to a `{ get() }` wrapper (cordis lets the settings
-    // page rewrite it live). The guard wants plain values, so unwrap every field.
-    const plain = {};
-    for (const [key, entry] of Object.entries(record))
-        plain[key] = unwrapVolatile(entry);
-    return plain;
+    // Validation re-wraps volatile fields, so unwrap the result once more.
+    return unwrapRecord(value);
 }
 /**
  * Whether a provider route is a Mistral route.

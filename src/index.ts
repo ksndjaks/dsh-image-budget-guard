@@ -37,6 +37,7 @@ import type { Session } from '@deepseek-ai/dsh-session';
 import {
   ConfigSchema,
   parseConfig,
+  readConfig,
   resolveRouteBudget,
   routeCapabilityOverride,
   routeEnabled,
@@ -351,7 +352,10 @@ export async function runGuard(
   facts: GuardRequestFacts,
   resolved: LlmCallConfig,
 ): Promise<GuardDecision> {
-  const { config, log } = state;
+  const { log } = state;
+  // Volatile fields update in place; read them per request so a settings change
+  // applies without a restart.
+  const config = readConfig(state.config);
   const provider = resolved.provider;
   const model = resolved.model;
   if (!config.enabled) return { action: 'noop', reason: 'disabled' };
@@ -535,11 +539,12 @@ export interface Guard {
  * Build one guard instance. Kept separate from {@link apply} so tests can drive
  * the exact decision path without booting an agent loop.
  */
-export function createGuard(ctx: Context, config: ImageBudgetGuardConfig): Guard {
+export function createGuard(ctx: Context, config: ImageBudgetGuardConfig | unknown): Guard {
+  const initial = readConfig(config);
   const state: GuardState = {
     ctx,
-    config,
-    log: createLogger(ctx, config.logLevel),
+    config: config as ImageBudgetGuardConfig,
+    log: createLogger(ctx, initial.logLevel),
     sizeCache: new Map(),
     modelInfoCache: new Map(),
     representationCache: new Map(),
@@ -572,7 +577,8 @@ export function apply(ctx: Context, config: ImageBudgetGuardConfig): void {
   // (tests, embedded hosts) may pass a partial object, and schemastery merges
   // unknown keys instead of rejecting them. parseConfig materializes the
   // documented defaults and applies the strict unknown-key check.
-  const guard = createGuard(ctx, parseConfig(config));
+  parseConfig(config);
+  const guard = createGuard(ctx, config);
 
   ctx.on(
     'agent/request',
@@ -629,6 +635,7 @@ export {
   assertKnownConfigKeys,
   isMistralRoute,
   parseConfig,
+  readConfig,
   resolveRouteBudget,
   routeCapabilityOverride,
   routeEnabled,

@@ -1,6 +1,6 @@
 {
   "schema": "image-budget-guard/replay-series@1",
-  "generatedAt": "2026-10-23T18:58:34.094Z",
+  "generatedAt": "2026-11-16T17:00:50.064Z",
   "command": "pnpm replay",
   "log": {
     "path": "/home/ksndjaks/.dsh/sessions/--home-ksndjaks-code-tmp--/session-15758717-978d-41a1-a89e-6c4288ef5287/session.v4.jsonl.zstd",
@@ -84,9 +84,9 @@
   },
   "isolation": {
     "mode": "temporary harness home; attachments/v1 symlinked to the real store; empty cache/",
-    "home": "/tmp/ibg-replay-es6FXU",
-    "attachmentsLink": "/tmp/ibg-replay-es6FXU/attachments/v1",
-    "cacheDir": "/tmp/ibg-replay-es6FXU/cache",
+    "home": "/tmp/ibg-replay-qppBCH",
+    "attachmentsLink": "/tmp/ibg-replay-qppBCH/attachments/v1",
+    "cacheDir": "/tmp/ibg-replay-qppBCH/cache",
     "realAttachmentsRoot": "/home/ksndjaks/.dsh/attachments/v1",
     "writesUserCache": false
   },
@@ -97,6 +97,7 @@
       "representation": "inline-base64",
       "maxRequestImageBytes": 6291456,
       "maxRequestImages": 60,
+      "mistralImageLimit": false,
       "minRetainImages": 6,
       "retainSteps": 12,
       "quanta": 4,
@@ -110,6 +111,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 6,
         "retainSteps": 12,
         "quanta": 4,
@@ -122,6 +124,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 6,
         "retainSteps": 12,
         "quanta": 4,
@@ -134,6 +137,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 6,
         "retainSteps": 0,
         "quanta": 4,
@@ -146,6 +150,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 4,
         "retainSteps": 4,
         "quanta": 4,
@@ -179,10 +184,10 @@
       "adapterCeilingBytes": 6291456,
       "pluginBudgetBytes": 6291456,
       "timings": {
-        "coldMs": 1719.4,
-        "warmMs": 228.6,
-        "baselineMs": 198.5,
-        "warmSpeedup": 7.52,
+        "coldMs": 1845.6,
+        "warmMs": 220.2,
+        "baselineMs": 173.1,
+        "warmSpeedup": 8.38,
         "coldGuardStoreReads": 53,
         "warmGuardStoreReads": 0,
         "coldMeasurerReads": 53,
@@ -252,7 +257,7 @@
         "representation": "inline-base64",
         "dimension": "bytes",
         "maxBytes": 6291456,
-        "maxImages": null,
+        "maxImages": 60,
         "minRetainImages": 6,
         "retainSteps": 12,
         "quanta": 4
@@ -263,6 +268,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 6,
         "retainSteps": 12,
         "quanta": 4,
@@ -11563,7 +11569,7 @@
         }
       ],
       "warm": {
-        "ms": 228.6,
+        "ms": 220.2,
         "guardStoreReads": 0,
         "measurerReads": 53,
         "matchesCold": true
@@ -11597,10 +11603,10 @@
       "adapterCeilingBytes": 20971520,
       "pluginBudgetBytes": 6291456,
       "timings": {
-        "coldMs": 1459.2,
-        "warmMs": 208.5,
-        "baselineMs": 181.4,
-        "warmSpeedup": 7,
+        "coldMs": 1421,
+        "warmMs": 207.6,
+        "baselineMs": 164.9,
+        "warmSpeedup": 6.85,
         "coldGuardStoreReads": 53,
         "warmGuardStoreReads": 0,
         "coldMeasurerReads": 53,
@@ -11780,7 +11786,7 @@
         "representation": "inline-base64",
         "dimension": "bytes",
         "maxBytes": 6291456,
-        "maxImages": null,
+        "maxImages": 60,
         "minRetainImages": 6,
         "retainSteps": 12,
         "quanta": 4
@@ -11791,6 +11797,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 6,
         "retainSteps": 12,
         "quanta": 4,
@@ -23091,7 +23098,7 @@
         }
       ],
       "warm": {
-        "ms": 208.5,
+        "ms": 207.6,
         "guardStoreReads": 0,
         "measurerReads": 53,
         "matchesCold": true
@@ -23128,10 +23135,10 @@
       "adapterCeilingBytes": 20971520,
       "pluginBudgetBytes": 6291456,
       "timings": {
-        "coldMs": 323.9,
-        "warmMs": 213.3,
-        "baselineMs": 182.8,
-        "warmSpeedup": 1.52,
+        "coldMs": 307.2,
+        "warmMs": 199.9,
+        "baselineMs": 168.6,
+        "warmSpeedup": 1.54,
         "coldGuardStoreReads": 53,
         "warmGuardStoreReads": 0,
         "coldMeasurerReads": 53,
@@ -23289,7 +23296,7 @@
         "representation": "inline-base64",
         "dimension": "bytes",
         "maxBytes": 6291456,
-        "maxImages": null,
+        "maxImages": 60,
         "minRetainImages": 6,
         "retainSteps": 0,
         "quanta": 4
@@ -23300,6 +23307,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 6,
         "retainSteps": 0,
         "quanta": 4,
@@ -34600,7 +34608,7 @@
         }
       ],
       "warm": {
-        "ms": 213.3,
+        "ms": 199.9,
         "guardStoreReads": 0,
         "measurerReads": 53,
         "matchesCold": true
@@ -34637,9 +34645,9 @@
       "adapterCeilingBytes": 20971520,
       "pluginBudgetBytes": 6291456,
       "timings": {
-        "coldMs": 334.1,
-        "warmMs": 214,
-        "baselineMs": 182,
+        "coldMs": 299.1,
+        "warmMs": 192.2,
+        "baselineMs": 161.6,
         "warmSpeedup": 1.56,
         "coldGuardStoreReads": 53,
         "warmGuardStoreReads": 0,
@@ -34812,7 +34820,7 @@
         "representation": "inline-base64",
         "dimension": "bytes",
         "maxBytes": 6291456,
-        "maxImages": null,
+        "maxImages": 60,
         "minRetainImages": 4,
         "retainSteps": 4,
         "quanta": 4
@@ -34823,6 +34831,7 @@
         "representation": "inline-base64",
         "maxRequestImageBytes": 6291456,
         "maxRequestImages": 60,
+        "mistralImageLimit": false,
         "minRetainImages": 4,
         "retainSteps": 4,
         "quanta": 4,
@@ -46123,7 +46132,7 @@
         }
       ],
       "warm": {
-        "ms": 214,
+        "ms": 192.2,
         "guardStoreReads": 0,
         "measurerReads": 53,
         "matchesCold": true
