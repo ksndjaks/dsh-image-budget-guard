@@ -13,3 +13,6 @@ coverage/
 # Local scratch
 tmp/
 *.tmp
+
+# Packed tarballs (pnpm pack / npm pack output)
+*.tgz

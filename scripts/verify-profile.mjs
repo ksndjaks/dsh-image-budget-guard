@@ -164,6 +164,43 @@ function checkBundleRegistration() {
   };
 }
 
+/**
+ * Step A1: is the installed copy actually registered as a profile layer?
+ *
+ * `dsh plugin add` registers a bundle by appending it to `dsh.profile.bundles`
+ * (`reconcile()` in @deepseek-ai/dsh-plugin-manager). That function only walks
+ * *newly added* dependencies, so if the entry is ever lost while the dependency
+ * stays installed, nothing re-adds it: the plugin is silently inactive and
+ * `--dump-config` shows no row and no warning. Composing the package's own layer
+ * with `--patch` cannot catch that, because it bypasses the registration.
+ */
+function checkProfileRegistration() {
+  const dir = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'profiles', PROFILE);
+  let manifest;
+  try {
+    manifest = readProfileManifest('dsh', dir);
+  } catch (error) {
+    return { ok: false, detail: `cannot read profile manifest in ${dir}: ${String(error)}` };
+  }
+  const dependencies = Object.keys(manifest.dependencies ?? {});
+  if (!dependencies.includes(PACKAGE_NAME)) {
+    return { ok: false, detail: `${PACKAGE_NAME} is not installed in profile ${PROFILE}` };
+  }
+  const bundles = manifest.dsh?.profile?.bundles ?? [];
+  if (bundles.includes(PACKAGE_NAME)) {
+    return { ok: true, detail: `installed and registered in dsh.profile.bundles (${bundles.length} bundles)` };
+  }
+  return {
+    ok: false,
+    detail:
+      `installed but NOT registered in dsh.profile.bundles, so the plugin is silently inactive.\n` +
+      `  reconcile() only registers newly added dependencies, so reinstalling is the repair:\n` +
+      `    dsh plugin --profile ${PROFILE} remove ${PACKAGE_NAME}\n` +
+      `    dsh plugin --profile ${PROFILE} add ${process.env.GUARD_INSTALL_SPEC ?? '<published spec>'}\n` +
+      `  then restart the profile.`,
+  };
+}
+
 /** Run `--dump-config` for the real profile, optionally with one patch overlay. */
 async function dumpConfig(extraArgs) {
   const { stdout, stderr } = await execFileAsync(
@@ -476,6 +513,9 @@ const registration = checkBundleRegistration();
 console.log(`${registration.ok ? 'PASS' : 'FAIL'} bundle auto-registration — ${registration.detail}`);
 if (registration.files !== undefined) for (const file of registration.files) console.log(`      layer: ${file}`);
 
+const installed = checkProfileRegistration();
+console.log(`${installed.ok ? 'PASS' : 'FAIL'} profile registration — ${installed.detail}`);
+
 const composition = await checkPatchComposition();
 console.log(`${composition.ok ? 'PASS' : 'FAIL'} patch/composition — ${composition.detail}`);
 if (composition.excerpt !== undefined) for (const line of composition.excerpt) console.log(`      ${line}`);
@@ -488,4 +528,4 @@ if (mount.before !== undefined) {
   );
 }
 
-if (!link.ok || !registration.ok || !composition.ok || !mount.ok) process.exitCode = 1;
+if (!link.ok || !registration.ok || !installed.ok || !composition.ok || !mount.ok) process.exitCode = 1;

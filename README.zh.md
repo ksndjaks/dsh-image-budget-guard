@@ -77,7 +77,7 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 安装后重启对应 profile。`<package-spec>` 可以是 npm 包名、git 引用
 （`github:<owner>/<repo>`）或本地路径（`link:/absolute/path`）。本地 checkout 需要先构建
 一次;
-支持 DeepSeek Harness `0.2.1-rc.1`、`0.2.1-rc.2` 与 `0.2.1-rc.3`（范围 `>=0.2.1-rc.1 <=0.2.1`），需要 Node.js `>=22`。
+支持 DeepSeek Harness `0.2.1-rc.1` 至 `0.2.1-rc.5`（范围 `>=0.2.1-rc.1 <=0.2.1`），需要 Node.js `>=22`。
 
 ## 配置
 
@@ -116,10 +116,10 @@ Standard Schema 接口校验它。
 
 ## 工作原理
 
-1. **挂钩**：守卫以 `prepend` 监听 `agent/request` waterfall，并先 `await next()`。
-   这是唯一能看到**最终** `(provider, model)` 的公开接缝（模型切换就在同一个 waterfall
-   内改写它），而且它仍早于 `buildRequest()` 派生表层，因此在此追加的事件会进入
-   本次请求。
+1. **挂钩**：守卫以 `prepend` 监听 `agent/request` waterfall，并先 `await next()`，
+   从而在所有监听器解析完毕后读到**最终**的 `(provider, model)`（当前版本里模型切换就在
+   同一个 waterfall 内改写路由；更新的版本会提前固定路由并拒绝在此修改）。它仍早于
+   `buildRequest()` 派生表层，因此在此追加的事件会进入本次请求。
 2. **采集出现位置**：按请求顺序遍历当前表层，收集 `user/message` 与 `tool/result`
    节点上的每个图片出现位置，深度优先编号，且把已经投影为占位符的位置也计入。
    assistant 节点被排除：`image/offload` 只以输入节点为目标，且当前适配器声明只输出文本。

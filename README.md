@@ -119,7 +119,7 @@ Restart the profile afterwards. `<package-spec>` is an npm name, a git reference
 (`github:<owner>/<repo>`), or a local path (`link:/absolute/path`). A local
 checkout must be built once.
 
-Supports DeepSeek Harness `0.2.1-rc.1`, `0.2.1-rc.2` and `0.2.1-rc.3`
+Supports DeepSeek Harness `0.2.1-rc.1` through `0.2.1-rc.5`
 (range `>=0.2.1-rc.1 <=0.2.1`) and Node.js `>=22`.
 
 ## Configuration
@@ -162,10 +162,11 @@ schema and the launcher validates it through the Standard Schema interface.
 ## How it works
 
 1. **Hook.** The guard listens on the `agent/request` waterfall with `prepend`
-   and awaits `next()`. That is the only public seam that observes the final
-   `(provider, model)` — model selection rewrites it inside the same waterfall —
-   and it still runs before `buildRequest()` derives the surface, so an event
-   appended here belongs to the request being built.
+   and awaits `next()`, so it reads the final `(provider, model)` after every
+   other listener has resolved it (in current releases model selection rewrites
+   the route inside this waterfall; newer builds fix it beforehand and reject a
+   change here). It still runs before `buildRequest()` derives the surface, so an
+   event appended here belongs to the request being built.
 2. **Occurrences.** It walks the current surface in request order and collects
    every image occurrence of `user/message` and `tool/result` nodes, counting
    indexes depth-first and including occurrences already projected to

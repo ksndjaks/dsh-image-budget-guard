@@ -6,7 +6,7 @@ package manager state.
 
 ## Requirements
 
-- DeepSeek Harness `0.2.1-rc.1`, `0.2.1-rc.2` or `0.2.1-rc.3` (anything in `>=0.2.1-rc.1 <=0.2.1`).
+- DeepSeek Harness `0.2.1-rc.1` through `0.2.1-rc.5` (anything in `>=0.2.1-rc.1 <=0.2.1`).
 - Node.js `>=22`.
 - `pnpm` on `PATH` (`dsh plugin` runs it for you).
 - A built `dist/` when installing from a local checkout (`pnpm build`).
