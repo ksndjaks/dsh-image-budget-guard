@@ -23,10 +23,14 @@
       "types": "./dist/projection.d.ts",
       "default": "./dist/projection.js"
     },
+    "./client": {
+      "default": "./client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "client.js",
     "locale/*.json",
     "cordis.patch.yml",
     "README.md",
@@ -63,6 +67,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
     }
   },
   "license": "MIT"

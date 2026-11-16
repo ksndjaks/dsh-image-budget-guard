@@ -82,8 +82,10 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 
 ## 配置
 
-标量字段可以在 Harness 界面里本插件自己的设置页中修改（插件行上的「配置」动作），
-因为它们声明为 `.volatile()` —— 设置服务只渲染 volatile 字段。`perRoute` 属于普通配置，
+标量字段可以在 Harness 界面里本插件自己的设置卡片中修改（打开包，再点 `image-budget-guard` 行）。
+第三方插件仅凭 schema 不会得到配置界面：插件页只把注册了 `plugins.row.config` 槽的行视为可配置，
+因此本包自带客户端半边（`client.js`），注册
+`@ksndjaks/dsh-image-budget-guard#image-budget-guard` 并渲染该卡片。字段声明为 `.volatile()` —— 设置服务只渲染 volatile 字段。`perRoute` 属于普通配置，
 请在 profile patch 中编辑。界面上的改动会在下一个请求生效，无需重启：守卫每次请求都会
 读取 volatile 引用。
 

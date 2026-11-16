@@ -127,9 +127,13 @@ Supports DeepSeek Harness `0.2.1-rc.1` through `0.2.2-rc.3` (range
 
 ## Configuration
 
-The scalar fields are editable from the plugin's own settings page in the
-Harness UI (the **Configure** action on the plugin row), because they are
-declared `.volatile()` — the settings service only renders volatile fields.
+The scalar fields are editable from the plugin's own settings card in the
+Harness UI (open the package, then the `image-budget-guard` row). A third-party
+plugin gets no configuration UI from its schema alone: the Plugins page treats a
+row as configurable only when the row's key is registered on the
+`plugins.row.config` slot, so this package ships a client half (`client.js`)
+that registers `@ksndjaks/dsh-image-budget-guard#image-budget-guard` and renders
+the card. The fields are declared `.volatile()` — the settings service only renders volatile fields.
 `perRoute` is ordinary config and is edited in the profile patch. A change made
 there reaches the next request without a restart: the guard reads the volatile
 references on every request.
