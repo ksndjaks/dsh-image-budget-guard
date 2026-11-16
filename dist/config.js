@@ -30,6 +30,7 @@ export const MISTRAL_IMAGE_LIMIT = 20;
 const representationSetting = z
     .union([z.const('auto'), z.const('inline-base64'), z.const('files')])
     .default('auto')
+    .volatile()
     .description('预算维度判定方式。auto 依据已挂载的适配器目录推断：llm-pi-ai 视为内联 base64（按字节），llm-deepseek 视为 Files（按数量）；推断不出时保守按字节。');
 /**
  * Exact-route override. A route is identified by the `(provider, model)` pair
@@ -50,40 +51,62 @@ export const RouteOverrideSchema = z.object({
     retainSteps: z.natural().description('该路由的逐字保留步数窗口，覆盖全局值。'),
     quanta: z.natural().min(1).description('该路由单次决策至少省略的出现位置数，覆盖全局值。'),
 });
-/** Plugin configuration; every field is optional and defaulted. */
+/**
+ * Plugin configuration; every field is optional and defaulted.
+ *
+ * The scalar fields are `.volatile()` because the Harness plugin settings page
+ * only renders volatile fields (`volatileForm()` in dsh-settings drops a plain
+ * scalar), and a volatile field is what the settings service is allowed to
+ * rewrite live. `perRoute` stays ordinary config: it is an advanced list edited
+ * in the profile patch, and `settings.write` preserves ordinary fields.
+ *
+ * A volatile field resolves to a `{ get() }` wrapper, so the schema's output
+ * type is not {@link ImageBudgetGuardConfig}; {@link parseConfig} unwraps it.
+ */
 export const ConfigSchema = z.object({
-    enabled: z.boolean().default(true).description('总开关。关闭后所有请求钩子直接返回，不写任何事件。'),
+    enabled: z
+        .boolean()
+        .default(true)
+        .volatile()
+        .description('总开关。关闭后所有请求钩子直接返回，不写任何事件。'),
     dryRun: z
         .boolean()
         .default(false)
+        .volatile()
         .description('只决策与记录，不写会话事件。用于先观察将省略哪些图片。'),
     representation: representationSetting,
     maxRequestImageBytes: z
         .natural()
         .min(1)
         .default(6 * 1024 * 1024)
+        .volatile()
         .description('内联 base64 路由的字节预算：单次请求累计的编码字节。应不高于适配器自身的 maxRequestImageBytes（llm-pi-ai 默认 20 MiB）。'),
     maxRequestImages: z
         .natural()
         .min(1)
         .default(60)
+        .volatile()
         .description('出现位置数量预算。内联路由与字节预算同时生效（取更严者），Files 路由只按数量。DeepSeek 的 /v1/files 允许 600 张，可按需调高。'),
     mistralImageLimit: z
         .boolean()
         .default(false)
+        .volatile()
         .description('针对 Mistral 供应商的单独优化：启用后，Mistral 路由的图片数量上限固定为 20 张（Mistral 会拒绝第 21 张图，即使请求体只有几 MiB）。只影响 provider 名为 mistral 的路由，其他供应商不受影响。'),
     minRetainImages: z
         .natural()
         .default(6)
+        .volatile()
         .description('永远不省略的最新图片张数。保留下限 = 该值 × 单图请求字节，且优先于预算：无法满足预算时只记录 budget-unsatisfiable，不破坏下限。'),
     retainSteps: z
         .natural()
         .default(12)
+        .volatile()
         .description('最近 N 步内出现的图片不省略（0 表示只保留 minRetainImages 下限）。注意它以整条消息为单位保护，一次粘贴 N 张会一次性钉住 N 个位置。'),
     quanta: z
         .natural()
         .min(1)
         .default(4)
+        .volatile()
         .description('单次决策至少省略的出现位置数；候选不足时例外。值越大，请求前缀被重写的次数越少。'),
     perRoute: z
         .array(RouteOverrideSchema)
@@ -92,6 +115,7 @@ export const ConfigSchema = z.object({
     logLevel: z
         .union(LOG_LEVELS.map((level) => z.const(level)))
         .default('info')
+        .volatile()
         .description('日志级别。注意 warn 记录走 info 通道（DSH 默认只收集 error/info）。'),
 });
 /** Top-level keys the schema accepts. */
@@ -149,6 +173,24 @@ export function assertKnownConfigKeys(raw) {
         }
     });
 }
+/** Cordis marks a volatile wrapper with this write symbol. */
+const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write');
+/**
+ * Read a volatile field's current value.
+ *
+ * @param value - a resolved field, possibly a cordis volatile wrapper.
+ * @returns the plain value.
+ */
+function unwrapVolatile(value) {
+    if (value === null || typeof value !== 'object')
+        return value;
+    const candidate = value;
+    if (typeof candidate.get !== 'function')
+        return value;
+    if (!(VOLATILE_WRITE in value))
+        return value;
+    return candidate.get();
+}
 /**
  * Validate one raw configuration and materialize every default.
  *
@@ -169,7 +211,12 @@ export function parseConfig(raw) {
     }
     const record = value;
     assertKnownConfigKeys(record);
-    return record;
+    // A volatile field resolves to a `{ get() }` wrapper (cordis lets the settings
+    // page rewrite it live). The guard wants plain values, so unwrap every field.
+    const plain = {};
+    for (const [key, entry] of Object.entries(record))
+        plain[key] = unwrapVolatile(entry);
+    return plain;
 }
 /**
  * Whether a provider route is a Mistral route.

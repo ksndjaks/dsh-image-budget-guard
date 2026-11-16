@@ -100,8 +100,10 @@ test('strict: the Standard Schema interface still validates values', () => {
 
   const good = standard.validate({ dryRun: true });
   assert.equal(good.issues, undefined);
-  assert.equal(good.value.dryRun, true);
-  assert.equal(good.value.enabled, true);
+  // A volatile field resolves to a `{ get() }` wrapper; parseConfig unwraps it.
+  assert.equal(typeof good.value.dryRun?.get, 'function', 'volatile fields resolve to a wrapper');
+  assert.equal(good.value.dryRun.get(), true);
+  assert.equal(parseConfig({ dryRun: true }).dryRun, true);
 
   const bad = standard.validate({ enabled: 'yes' });
   assert.ok(bad.issues !== undefined, 'a rejected load reports issues');

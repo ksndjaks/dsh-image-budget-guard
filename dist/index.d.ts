@@ -39,7 +39,7 @@ import { type ProjectionMode } from './projection.js';
  * `~standard.validate()` interface, which Zod 4 implements; `.strict()` makes
  * an unknown key a load-time `ValidationError` instead of a silent typo.
  */
-export declare const Config: Schemastery<ImageBudgetGuardConfig, ImageBudgetGuardConfig, "plain">;
+export declare const Config: Schemastery<any, any, "plain">;
 /** Plugin name used in diagnostics. */
 export declare const name = "image-budget-guard";
 /**

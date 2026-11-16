@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 import { bundlePatchPaths, evaluatePluginCompatibility, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot';
 
-import { ConfigSchema } from '../dist/index.js';
+import { ConfigSchema, parseConfig } from '../dist/index.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
@@ -66,13 +66,13 @@ test('the patch layer validates with the installer parser and inserts the guard 
   assert.ok(ours[0].config !== undefined, 'the row must carry a configuration');
 
   // Unknown keys would be rejected by the loader at activation; catch them here.
-  const validation = ConfigSchema['~standard'].validate(ours[0].config);
-  assert.equal(validation.issues, undefined, `shipped config must be valid: ${JSON.stringify(validation.issues)}`);
-  assert.equal(validation.value.enabled, true);
-  assert.equal(validation.value.dryRun, false);
-  assert.ok(validation.value.maxRequestImageBytes > 0);
-  assert.ok(validation.value.minRetainImages >= 0);
-  assert.ok(validation.value.retainSteps >= 0);
+  // parseConfig also unwraps the volatile fields the settings page edits.
+  const shipped = parseConfig(ours[0].config);
+  assert.equal(shipped.enabled, true);
+  assert.equal(shipped.dryRun, false);
+  assert.ok(shipped.maxRequestImageBytes > 0);
+  assert.ok(shipped.minRetainImages >= 0);
+  assert.ok(shipped.retainSteps >= 0);
 });
 
 test('the layer touches nothing but its own row', () => {

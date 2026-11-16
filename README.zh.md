@@ -82,6 +82,10 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 
 ## 配置
 
+标量字段可以在 Harness 界面里本插件自己的设置页中修改（插件行上的「配置」动作），
+因为它们声明为 `.volatile()` —— 设置服务只渲染 volatile 字段。`perRoute` 属于普通配置，
+请在 profile patch 中编辑。
+
 所有字段都可选；下表为 schema 默认值。bundle 自带的配置行显式设置了 `enabled`、
 `dryRun`、`maxRequestImageBytes`、`minRetainImages`、`retainSteps`、`quanta` 与
 `logLevel`，见 [`cordis.patch.yml`](cordis.patch.yml)。它出厂使用

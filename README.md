@@ -127,6 +127,11 @@ Supports DeepSeek Harness `0.2.1-rc.1` through `0.2.2-rc.3` (range
 
 ## Configuration
 
+The scalar fields are editable from the plugin's own settings page in the
+Harness UI (the **Configure** action on the plugin row), because they are
+declared `.volatile()` — the settings service only renders volatile fields.
+`perRoute` is ordinary config and is edited in the profile patch.
+
 Every field is optional; the values below are the schema defaults. The bundle's
 shipped row sets `enabled`, `dryRun`, `maxRequestImageBytes`, `minRetainImages`,
 `retainSteps`, `quanta` and `logLevel` explicitly — see

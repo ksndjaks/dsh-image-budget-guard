@@ -22,8 +22,19 @@ export declare const MISTRAL_IMAGE_LIMIT = 20;
  * silently apply to a different model on the same provider.
  */
 export declare const RouteOverrideSchema: Schemastery<RouteOverride>;
-/** Plugin configuration; every field is optional and defaulted. */
-export declare const ConfigSchema: Schemastery<ImageBudgetGuardConfig>;
+/**
+ * Plugin configuration; every field is optional and defaulted.
+ *
+ * The scalar fields are `.volatile()` because the Harness plugin settings page
+ * only renders volatile fields (`volatileForm()` in dsh-settings drops a plain
+ * scalar), and a volatile field is what the settings service is allowed to
+ * rewrite live. `perRoute` stays ordinary config: it is an advanced list edited
+ * in the profile patch, and `settings.write` preserves ordinary fields.
+ *
+ * A volatile field resolves to a `{ get() }` wrapper, so the schema's output
+ * type is not {@link ImageBudgetGuardConfig}; {@link parseConfig} unwraps it.
+ */
+export declare const ConfigSchema: Schemastery<any>;
 /** Validated plugin configuration. */
 export interface ImageBudgetGuardConfig {
     readonly enabled: boolean;
