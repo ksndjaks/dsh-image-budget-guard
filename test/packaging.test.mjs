@@ -93,18 +93,18 @@ test('the layer touches nothing but its own row', () => {
 
 test('declares the verified dsh support matrix', () => {
   // The harness checks `engines.dsh` first and only falls back to dsh peers
-  // (`unmetRequirements()` in @deepseek-ai/dsh-app-boot). rc.1 through rc.5 were
-  // each verified against this package; the 0.2.1 release is included because
-  // the same sources are published for it, while 0.2.2 must be re-verified
-  // before it is admitted.
-  for (const runtime of ['0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.1']) {
+  // (`unmetRequirements()` in @deepseek-ai/dsh-app-boot). Every 0.2.1 release
+  // through rc.5 was verified, and 0.2.2-rc.3 is verified against this build;
+  // the 0.2.2 release is admitted on the same sources. 0.2.3 must be
+  // re-verified before it is admitted.
+  for (const runtime of ['0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.1', '0.2.2-rc.1', '0.2.2-rc.2', '0.2.2-rc.3', '0.2.2']) {
     assert.equal(
       evaluatePluginCompatibility(manifest, {}, runtime),
       undefined,
       `manifest must be compatible with dsh ${runtime}`,
     );
   }
-  for (const runtime of ['0.2.0', '0.2.2-rc.1', '0.1.10']) {
+  for (const runtime of ['0.2.0', '0.2.3-rc.1', '0.1.10']) {
     assert.notEqual(
       evaluatePluginCompatibility(manifest, {}, runtime),
       undefined,

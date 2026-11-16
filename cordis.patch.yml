@@ -34,12 +34,19 @@
         # Files/reference routes (e.g. DeepSeek /v1/files): occurrence count.
         maxRequestImages: 60
         # Newest occurrences that are never omitted.
-        minRetainImages: 6
+        #
+        # The floor is minRetainImages x per-image request bytes, and it wins
+        # over the budget: the guard never omits a protected occurrence. On an
+        # inline route at llm-pi-ai's default 1 MiB per-image target a request
+        # version is ~1.33 MiB base64 (measured up to ~1.63 MiB when the
+        # quality ladder is exhausted), so six retained images cost ~8 MiB and
+        # a 6 MiB budget is unreachable. Four keeps the typical floor at
+        # ~5.3 MiB, inside the budget below.
+        minRetainImages: 4
         # Images admitted in the last N steps are never omitted. 0 keeps only
-        # the minRetainImages floor: on inline routes that re-encode at ~1 MiB
-        # per image (llm-pi-ai defaults) six retained images already cost
-        # ~5.8 MiB, so a 12-step window can exceed a 6 MiB budget. Raise
-        # maxRequestImageBytes (e.g. 10-12 MiB) to afford a wider window.
+        # the minRetainImages floor: a 12-step window protects every image of
+        # a recent pasted batch, which can exceed a 6 MiB budget on its own.
+        # Raise maxRequestImageBytes (e.g. 10-12 MiB) to afford a wider window.
         retainSteps: 0
         # Minimum occurrences omitted per decision (fewer only when fewer are
         # eligible).

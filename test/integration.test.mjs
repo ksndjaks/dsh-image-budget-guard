@@ -538,7 +538,12 @@ test('image-budget guard keeps real pi-ai request bodies under 6 MiB while the u
     control.finish.reason.failure.offloadImages >= 1,
     'the failure must name how many oldest images to offload',
   );
-  assert.match(control.finish.reason.failure.message, /base64 bound/);
+  // The wording of this diagnostic is not a contract: 0.2.1 said
+  // "exceed the <n>-byte base64 bound", 0.2.2 says "exceed the route image
+  // budget". Assert the stable parts (it names the omission count) and leave
+  // the phrasing to the adapter.
+  assert.match(control.finish.reason.failure.message, /pi-ai request images exceed the .*image (budget|bound)/);
+  assert.match(control.finish.reason.failure.message, new RegExp(`${control.finish.reason.failure.offloadImages} more oldest occurrence`));
 
   // Prove the failure was produced by the DEFAULT 20 MiB ceiling, not by some
   // smaller policy: recompute the adapter's exact `requiredImageOffload()`

@@ -77,13 +77,15 @@ dsh plugin --profile web add github:ksndjaks/dsh-image-budget-guard
 安装后重启对应 profile。`<package-spec>` 可以是 npm 包名、git 引用
 （`github:<owner>/<repo>`）或本地路径（`link:/absolute/path`）。本地 checkout 需要先构建
 一次;
-支持 DeepSeek Harness `0.2.1-rc.1` 至 `0.2.1-rc.5`（范围 `>=0.2.1-rc.1 <=0.2.1`），需要 Node.js `>=22`。
+支持 DeepSeek Harness `0.2.1-rc.1` 至 `0.2.2-rc.3`（范围 `>=0.2.1-rc.1 <=0.2.2`），需要 Node.js `>=22`。
 
 ## 配置
 
 所有字段都可选；下表为 schema 默认值。bundle 自带的配置行显式设置了 `enabled`、
 `dryRun`、`maxRequestImageBytes`、`minRetainImages`、`retainSteps`、`quanta` 与
-`logLevel`，见 [`cordis.patch.yml`](cordis.patch.yml)。
+`logLevel`，见 [`cordis.patch.yml`](cordis.patch.yml)。它出厂使用
+`minRetainImages: 4` 与 `retainSteps: 0`，因为保留下限直接决定 6 MiB 预算能否达成
+（见[调优](#调优)）。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
@@ -150,6 +152,26 @@ Standard Schema 接口校验它。
 - 压缩事务进行中（存在未闭合的 `compaction/start`）时，守卫不选图也不写事件，
   先让压缩改变表层。
 
+### 适配器自身的上限
+
+从 DeepSeek Harness 0.2.2 起，pi-ai 路由还多了**数量**上限 `maxRequestImages`
+（默认 50）与 `imageOffloadCountQuantum`（默认 10）。它和 `maxRequestImageBytes`
+一样是**失败驱动**的：适配器先组装请求、以 `IMAGE_OFFLOAD_REQUIRED` 失败，再由
+`compaction-image-offload` 省略最旧的出现位置并重试。它是兜底，不能替代字节预算——
+50 张图按每图 1 MiB 目标计算约 66 MiB。
+
+两者回答的是不同问题，建议同时保留：
+
+| 上限 | 回答的问题 | 时机 |
+| --- | --- | --- |
+| `maxRequestImageBytes`（适配器） | 请求体是否过大？ | 失败驱动 |
+| `maxRequestImages`（适配器，0.2.2+） | 图片是否过多？ | 失败驱动 |
+| `maxRequestImageBytes` / `maxRequestImages`（本插件） | 把请求体和数量都控制在预算内 | 请求前主动 |
+
+由于守卫先裁剪，预算设置合理时适配器的两个上限都不会触发。另外 0.2.2 的默认值 50
+值得对照各供应商的真实上限：有些网关允许更多图片，这类路由应主动调高，而不是让一次
+被动省略发生。
+
 ## 持久记录
 
 ```jsonc
@@ -169,8 +191,10 @@ Standard Schema 接口校验它。
   `llm-pi-ai` 默认每请求 20 MiB；因此 6 MiB 的守卫预算会在适配器拒绝之前很早就生效。
 - **保留下限要对照单图成本。** 经验公式：
   `maxRequestImageBytes >= minRetainImages × 单图 base64 字节`，再加上 `retainSteps`
-  窗口纳入的图片。内联路由若按每图约 1 MiB 重新编码，单图约 1.33 MiB base64，
-  六张就约 8 MiB——此时应抬高预算或降低下限。
+  窗口纳入的图片。内联路由若按每图约 1 MiB 重新编码，单图约 1.33 MiB base64
+  （质量阶梯耗尽时可达约 1.63 MiB），六张就约 8 MiB、无法塞进 6 MiB 预算；
+  出厂值 `minRetainImages: 4` 把典型下限压到约 5.3 MiB。改动其中任一数字时，
+  请同步调整另一个。
 - **`retainSteps` 以整条消息为单位保护。** 最近若干步内出现的图片会随其所属消息一起受保护，
   所以一次粘贴 N 张就会一次性钉住 N 个位置。若预算仍无法满足，先降 `retainSteps`
   （`0` 只保留 `minRetainImages` 下限），再降 `minRetainImages`，最后才抬高预算。

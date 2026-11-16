@@ -119,15 +119,17 @@ Restart the profile afterwards. `<package-spec>` is an npm name, a git reference
 (`github:<owner>/<repo>`), or a local path (`link:/absolute/path`). A local
 checkout must be built once.
 
-Supports DeepSeek Harness `0.2.1-rc.1` through `0.2.1-rc.5`
-(range `>=0.2.1-rc.1 <=0.2.1`) and Node.js `>=22`.
+Supports DeepSeek Harness `0.2.1-rc.1` through `0.2.2-rc.3` (range
+`>=0.2.1-rc.1 <=0.2.2`) and Node.js `>=22`.
 
 ## Configuration
 
 Every field is optional; the values below are the schema defaults. The bundle's
 shipped row sets `enabled`, `dryRun`, `maxRequestImageBytes`, `minRetainImages`,
 `retainSteps`, `quanta` and `logLevel` explicitly — see
-[`cordis.patch.yml`](cordis.patch.yml).
+[`cordis.patch.yml`](cordis.patch.yml). It ships `minRetainImages: 4` with
+`retainSteps: 0`, because the floor is what decides whether a 6 MiB budget is
+reachable at all (see [Tuning](#tuning)).
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -206,6 +208,30 @@ They compose rather than compete:
   guard does not select or write anything: it lets compaction change the surface
   first.
 
+### The adapter's own bounds
+
+Since DeepSeek Harness 0.2.2 a pi-ai route also has a **count** bound,
+`maxRequestImages` (default 50) with `imageOffloadCountQuantum` (default 10).
+Like `maxRequestImageBytes`, it is enforced *reactively*: the adapter assembles
+the request, fails with `IMAGE_OFFLOAD_REQUIRED`, and `compaction-image-offload`
+omits the oldest occurrences before the retry. It is a backstop, not a
+substitute for a byte budget — 50 images at a 1 MiB per-image target are about
+66 MiB on the wire.
+
+The two bounds answer different questions, so keep both:
+
+| Bound | Question | Timing |
+| --- | --- | --- |
+| `maxRequestImageBytes` (adapter) | is the body too large? | reactive |
+| `maxRequestImages` (adapter, 0.2.2+) | are there too many images? | reactive |
+| `maxRequestImageBytes` / `maxRequestImages` (this plugin) | keep the body and the count inside a budget | proactive |
+
+Because the guard trims first, a correctly sized guard budget keeps both adapter
+bounds from ever firing. The 0.2.2 default of 50 is also worth checking against
+each provider's real limit: it is lower than what some gateways accept, so a
+route that legitimately carries more images should raise it rather than let a
+reactive omission happen.
+
 ## The durable record
 
 ```jsonc
@@ -230,8 +256,10 @@ They compose rather than compete:
 - **Size the floors against the per-image cost.** Rule of thumb:
   `maxRequestImageBytes >= minRetainImages × perImageBase64`, plus whatever the
   `retainSteps` window admits. On an inline route that re-encodes at ~1 MiB per
-  image, one decoded image is ~1.33 MiB base64, so six retained images are
-  ~8 MiB — raise the budget or lower the floor.
+  image, one request version is ~1.33 MiB base64 (up to ~1.63 MiB when the
+  quality ladder is exhausted), so six retained images are ~8 MiB and cannot fit
+  a 6 MiB budget; the shipped `minRetainImages: 4` puts the typical floor at
+  ~5.3 MiB. Raise the budget or lower the floor when you change either number.
 - **`retainSteps` protects whole messages.** Every image admitted in a recent
   step is protected with it, so a single pasted batch of N images pins N
   occurrences at once. If a budget still cannot be met, reduce `retainSteps`
